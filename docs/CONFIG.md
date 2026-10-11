@@ -18,7 +18,9 @@ HTTP is still unauthenticated when enabled. Loopback is recommended; use
 `0.0.0.0:8056` only to deliberately expose it on all IPv4 interfaces.
 `[::]:8056` is a dual-stack wildcard bind (all IPv6 interfaces and,
 depending on the host, IPv4 too); treat it like `0.0.0.0` and avoid it
-unless that exposure is explicitly intended.
+unless that exposure is explicitly intended. When the opt-in address is
+not a loopback address, the service logs a startup warning that the
+unauthenticated API is network-reachable.
 
 An empty add-on `http_bind` value counts as unset: nothing is exported and
 HTTP stays disabled. Empty or invalid CLI/ENV values are startup errors.

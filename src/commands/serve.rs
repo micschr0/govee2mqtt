@@ -172,6 +172,22 @@ const ISSUE_76_EXPLANATION: &str = "Startup cannot automatically continue becaus
     metadata availability via the LAN API.";
 
 impl ServeCommand {
+    /// The HTTP API is unauthenticated, so make an opt-in that is reachable
+    /// from the network loud: warn on non-loopback bind addresses (WB-17).
+    /// Loopback binds (the recommended case) stay silent.
+    fn http_bind_warning(bind: &SocketAddr) -> Option<String> {
+        if bind.ip().is_loopback() {
+            return None;
+        }
+        let port = bind.port();
+        Some(format!(
+            "HTTP API enabled on {bind}, a non-loopback address. \
+             The HTTP API is unauthenticated and anyone who can reach {bind} \
+             may control your devices. Prefer 127.0.0.1:{port} or \
+             [::1]:{port} unless network exposure is intended."
+        ))
+    }
+
     pub async fn run(&self, args: &crate::Args) -> anyhow::Result<()> {
         // Validate before starting discovery or MQTT. CLI takes precedence.
         let http_bind = match self.http_bind {
@@ -179,6 +195,9 @@ impl ServeCommand {
             None => crate::opt_env_var::<SocketAddr>("GOVEE_HTTP_BIND")?,
         };
         log::info!("Starting service. version {}", govee_version());
+        if let Some(warning) = http_bind.as_ref().and_then(Self::http_bind_warning) {
+            log::warn!("{warning}");
+        }
         let state = Arc::new(crate::service::state::State::new());
 
         // First, use the HTTP APIs to determine the list of devices and
@@ -400,5 +419,34 @@ mod tests {
     #[test]
     fn legacy_port_cannot_enable_a_wildcard_listener() {
         assert!(ServeCommand::try_parse_from(["serve", "--http-port", "8056"]).is_err());
+    }
+
+    #[test]
+    fn non_loopback_http_bind_emits_warning() {
+        use std::net::SocketAddr;
+        for address in [
+            "0.0.0.0:8056",
+            "[::]:8056",
+            "10.1.2.3:18056",
+            "[fd00::1]:18056",
+        ] {
+            let addr: SocketAddr = address.parse().unwrap();
+            let warning = ServeCommand::http_bind_warning(&addr)
+                .unwrap_or_else(|| panic!("expected a warning for {addr}"));
+            assert!(warning.contains("unauthenticated"), "{warning}");
+            assert!(warning.contains(address), "{warning}");
+        }
+    }
+
+    #[test]
+    fn loopback_http_bind_does_not_warn() {
+        use std::net::SocketAddr;
+        for address in ["127.0.0.1:8056", "127.200.0.1:18056", "[::1]:8056"] {
+            let addr: SocketAddr = address.parse().unwrap();
+            assert!(
+                ServeCommand::http_bind_warning(&addr).is_none(),
+                "unexpected warning for {addr}"
+            );
+        }
     }
 }
