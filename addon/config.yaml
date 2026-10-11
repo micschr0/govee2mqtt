@@ -30,6 +30,7 @@ options:
   temperature_scale: "C"
 
 schema:
+  http_bind: "str?"
   temperature_scale: "str?"
   govee_email: "str?"
   govee_password: "password?"

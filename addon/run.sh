@@ -4,6 +4,11 @@ export RUST_BACKTRACE=full
 export RUST_LOG_STYLE=always
 export XDG_CACHE_HOME=/data
 
+# No default: setting an explicit IP:port opts into the HTTP API.
+if bashio::config.has_value http_bind ; then
+  export GOVEE_HTTP_BIND="$(bashio::config http_bind)"
+fi
+
 wait_for_mqtt() {
   local max_attempts=30
   local attempt=1

@@ -1,13 +1,40 @@
 # Configuration Options
 
+## Local HTTP API (disabled by default)
+
+The service starts no HTTP listener unless you explicitly configure an IP
+address and port. MQTT and LAN control do not require this API or its WebUI.
+
+|CLI (serve)|ENV|AddOn|Purpose|
+|---|---|-----|-------|
+|`--http-bind 127.0.0.1:8056`|`GOVEE_HTTP_BIND=127.0.0.1:8056`|`http_bind: "127.0.0.1:8056"`|Enable HTTP only on the specified IP:port; unset by default|
+
+CLI takes precedence over the environment. IPv6 uses brackets, for example
+`[::1]:8056`. Invalid or empty environment values fail at startup. The old
+`--http-port` flag is removed; specifying a port alone no longer enables a
+wildcard listener. To disable HTTP, remove the option and environment value.
+
+HTTP is still unauthenticated when enabled. Loopback is recommended; use
+`0.0.0.0:8056` only to deliberately expose it on all IPv4 interfaces.
+`[::]:8056` is a dual-stack wildcard bind (all IPv6 interfaces and,
+depending on the host, IPv4 too); treat it like `0.0.0.0` and avoid it
+unless that exposure is explicitly intended.
+
+An empty add-on `http_bind` value counts as unset: nothing is exported and
+HTTP stays disabled. Empty or invalid CLI/ENV values are startup errors.
+
+For LAN-only operation, leave Govee cloud credentials unset and enable LAN
+control on the device in the Govee Home app. Cloud credentials are optional
+for additional metadata and cloud-only functions.
+
 ## Govee Credentials
 
 While `govee2mqtt` can run without any govee credentials, it can only discover
 and control the devices for which you have already enabled LAN control.
 
-It is recommended that you configure at least your Govee username and password
-prior to your first run, as that is the only way for `govee2mqtt` to determine
-room names to pre-assign your lights into the appropriate Home Assistant areas.
+If you need cloud-provided room names to pre-assign lights into Home Assistant
+areas, you can optionally configure your Govee username and password. This is
+not required for the default LAN-only path.
 
 For scene control, for devices that don't support the LAN API, a Govee API Key
 is required.  If you don't already have one, [you can find instructions on

@@ -12,6 +12,7 @@ use anyhow::Context;
 use chrono::Utc;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 
@@ -19,9 +20,10 @@ pub static POLL_INTERVAL: Lazy<chrono::Duration> = Lazy::new(|| chrono::Duration
 
 #[derive(clap::Parser, Debug)]
 pub struct ServeCommand {
-    /// The port on which the HTTP API will listen
-    #[arg(long, default_value_t = 8056)]
-    http_port: u16,
+    /// Enable the unauthenticated HTTP API on this IP:port (disabled by default).
+    /// You may also set GOVEE_HTTP_BIND via the environment.
+    #[arg(long)]
+    http_bind: Option<SocketAddr>,
 }
 
 async fn poll_single_device(state: &StateHandle, device: &Device) -> anyhow::Result<()> {
@@ -171,6 +173,11 @@ const ISSUE_76_EXPLANATION: &str = "Startup cannot automatically continue becaus
 
 impl ServeCommand {
     pub async fn run(&self, args: &crate::Args) -> anyhow::Result<()> {
+        // Validate before starting discovery or MQTT. CLI takes precedence.
+        let http_bind = match self.http_bind {
+            Some(addr) => Some(addr),
+            None => crate::opt_env_var::<SocketAddr>("GOVEE_HTTP_BIND")?,
+        };
         log::info!("Starting service. version {}", govee_version());
         let state = Arc::new(crate::service::state::State::new());
 
@@ -350,8 +357,48 @@ impl ServeCommand {
         // start advertising on local mqtt
         spawn_hass_integration(state.clone(), &args.hass_args).await?;
 
-        run_http_server(state.clone(), self.http_port)
-            .await
-            .with_context(|| format!("Starting HTTP service on port {}", self.http_port))
+        match http_bind {
+            Some(addr) => run_http_server(state.clone(), addr)
+                .await
+                .with_context(|| format!("Starting HTTP service on {addr}")),
+            None => {
+                log::info!("HTTP API disabled; MQTT and LAN service remain active");
+                // The HTTP await used to keep the runtime and its background
+                // tasks alive. Without HTTP, retain the same service lifetime.
+                std::future::pending::<anyhow::Result<()>>().await
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ServeCommand;
+    use clap::Parser;
+
+    #[test]
+    fn http_is_not_enabled_by_default() {
+        let command = ServeCommand::try_parse_from(["serve"]).unwrap();
+        assert!(command.http_bind.is_none());
+    }
+
+    #[test]
+    fn http_opt_in_preserves_explicit_ipv4_and_ipv6_addresses() {
+        for address in ["127.0.0.1:18056", "[::1]:18056"] {
+            let command = ServeCommand::try_parse_from(["serve", "--http-bind", address]).unwrap();
+            assert_eq!(command.http_bind, Some(address.parse().unwrap()));
+        }
+    }
+
+    #[test]
+    fn invalid_http_bind_is_rejected() {
+        for address in ["", "localhost:8056", "127.0.0.1", "127.0.0.1:65536"] {
+            assert!(ServeCommand::try_parse_from(["serve", "--http-bind", address]).is_err());
+        }
+    }
+
+    #[test]
+    fn legacy_port_cannot_enable_a_wildcard_listener() {
+        assert!(ServeCommand::try_parse_from(["serve", "--http-port", "8056"]).is_err());
     }
 }
