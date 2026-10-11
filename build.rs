@@ -22,6 +22,11 @@ fn main() {
         ci_tag = info.trim().to_string();
     }
 
+    // Refresh the embedded version when HEAD moves (commits/branch
+    // switches), so sw_version in discovery payloads and logs matches the
+    // built code instead of sticking to the commit of the first build
+    // (review EXP-H02).
+    println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.tag");
     println!("cargo:rustc-env=GOVEE_CI_TAG={ci_tag}");
 }

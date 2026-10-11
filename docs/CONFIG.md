@@ -9,10 +9,15 @@ address and port. MQTT and LAN control do not require this API or its WebUI.
 |---|---|-----|-------|
 |`--http-bind 127.0.0.1:8056`|`GOVEE_HTTP_BIND=127.0.0.1:8056`|`http_bind: "127.0.0.1:8056"`|Enable HTTP only on the specified IP:port; unset by default|
 
-CLI takes precedence over the environment. IPv6 uses brackets, for example
+CLI takes precedence over the environment; a set `--http-bind` short-circuits
+environment validation entirely, so an invalid or empty `GOVEE_HTTP_BIND` is
+not even read in that case. IPv6 uses brackets, for example
 `[::1]:8056`. Invalid or empty environment values fail at startup. The old
 `--http-port` flag is removed; specifying a port alone no longer enables a
 wildcard listener. To disable HTTP, remove the option and environment value.
+The value may also be provided from a file via `GOVEE_HTTP_BIND_FILE=/path`
+(the file content is parsed as the same IP:port and fails closed on invalid
+or unreadable content).
 
 HTTP is still unauthenticated when enabled. Loopback is recommended; use
 `0.0.0.0:8056` only to deliberately expose it on all IPv4 interfaces.

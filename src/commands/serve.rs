@@ -172,11 +172,24 @@ const ISSUE_76_EXPLANATION: &str = "Startup cannot automatically continue becaus
     metadata availability via the LAN API.";
 
 impl ServeCommand {
+    /// `Ipv6Addr::is_loopback` only recognizes `::1`. An IPv4-mapped IPv6
+    /// bind such as `[::ffff:127.0.0.1]:8056` is effectively an IPv4 loopback
+    /// bind on Linux, so normalize before classifying (review EXP-R01).
+    fn is_effective_loopback(bind: &SocketAddr) -> bool {
+        match bind.ip() {
+            std::net::IpAddr::V4(ip) => ip.is_loopback(),
+            std::net::IpAddr::V6(ip) => match ip.to_ipv4_mapped() {
+                Some(v4) => v4.is_loopback(),
+                None => ip.is_loopback(),
+            },
+        }
+    }
+
     /// The HTTP API is unauthenticated, so make an opt-in that is reachable
     /// from the network loud: warn on non-loopback bind addresses (WB-17).
     /// Loopback binds (the recommended case) stay silent.
     fn http_bind_warning(bind: &SocketAddr) -> Option<String> {
-        if bind.ip().is_loopback() {
+        if Self::is_effective_loopback(bind) {
             return None;
         }
         let port = bind.port();
@@ -422,6 +435,12 @@ mod tests {
     }
 
     #[test]
+    fn wildcard_ipv6_http_bind_parses_but_warns() {
+        let command = ServeCommand::try_parse_from(["serve", "--http-bind", "[::]:8056"]).unwrap();
+        assert_eq!(command.http_bind, Some("[::]:8056".parse().unwrap()));
+    }
+
+    #[test]
     fn non_loopback_http_bind_emits_warning() {
         use std::net::SocketAddr;
         for address in [
@@ -429,6 +448,7 @@ mod tests {
             "[::]:8056",
             "10.1.2.3:18056",
             "[fd00::1]:18056",
+            "[::ffff:10.1.2.3]:18056",
         ] {
             let addr: SocketAddr = address.parse().unwrap();
             let warning = ServeCommand::http_bind_warning(&addr)
@@ -441,12 +461,76 @@ mod tests {
     #[test]
     fn loopback_http_bind_does_not_warn() {
         use std::net::SocketAddr;
-        for address in ["127.0.0.1:8056", "127.200.0.1:18056", "[::1]:8056"] {
+        for address in [
+            "127.0.0.1:8056",
+            "127.200.0.1:18056",
+            "[::1]:8056",
+            "[::ffff:127.0.0.1]:8056",
+        ] {
             let addr: SocketAddr = address.parse().unwrap();
             assert!(
                 ServeCommand::http_bind_warning(&addr).is_none(),
                 "unexpected warning for {addr}"
             );
         }
+    }
+
+    // The add-on ENV path is the risk path of SEC-02; cover the resolver
+    // semantics with unit tests (review EXP-R02). Variable names are unique
+    // per test so parallel tests cannot observe each other's values.
+    #[test]
+    fn env_opt_in_valid_value_resolves() {
+        let name = "GOVEE_TEST_HTTP_BIND_VALID";
+        std::env::set_var(name, "127.0.0.1:18056");
+        let resolved: anyhow::Result<Option<std::net::SocketAddr>> = crate::opt_env_var(name);
+        std::env::remove_var(name);
+        assert_eq!(resolved.unwrap(), Some("127.0.0.1:18056".parse().unwrap()));
+    }
+
+    #[test]
+    fn env_opt_in_empty_or_invalid_values_fail_closed() {
+        for (name, value) in [
+            ("GOVEE_TEST_HTTP_BIND_EMPTY", ""),
+            ("GOVEE_TEST_HTTP_BIND_INVALID", "not-an-address"),
+        ] {
+            std::env::set_var(name, value);
+            let resolved: anyhow::Result<Option<std::net::SocketAddr>> = crate::opt_env_var(name);
+            std::env::remove_var(name);
+            assert!(resolved.is_err(), "{name} must fail closed");
+        }
+    }
+
+    #[test]
+    fn env_opt_in_file_variant_reads_parses_and_fails_closed() {
+        let name = "GOVEE_TEST_HTTP_BIND_FILE_VARIANT";
+        let file_name = "GOVEE_TEST_HTTP_BIND_FILE_VARIANT_FILE";
+        let path = std::env::temp_dir().join("govee-test-http-bind-file-variant");
+
+        std::fs::write(&path, "[::1]:18057\n").unwrap();
+        std::env::set_var(file_name, &path);
+        let resolved: anyhow::Result<Option<std::net::SocketAddr>> = crate::opt_env_var(name);
+        std::env::remove_var(file_name);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(resolved.unwrap(), Some("[::1]:18057".parse().unwrap()));
+
+        std::env::set_var(file_name, "not a socket addr");
+        let resolved: anyhow::Result<Option<std::net::SocketAddr>> = crate::opt_env_var(name);
+        std::env::remove_var(file_name);
+        assert!(
+            resolved.is_err(),
+            "unparsable _FILE content must fail closed"
+        );
+    }
+
+    #[test]
+    fn env_opt_in_missing_file_fails_closed() {
+        let name = "GOVEE_TEST_HTTP_BIND_FILE_MISSING";
+        let file_name = "GOVEE_TEST_HTTP_BIND_FILE_MISSING_FILE";
+        let path = std::env::temp_dir().join("govee-test-http-bind-file-missing");
+        let _ = std::fs::remove_file(&path);
+        std::env::set_var(file_name, &path);
+        let resolved: anyhow::Result<Option<std::net::SocketAddr>> = crate::opt_env_var(name);
+        std::env::remove_var(file_name);
+        assert!(resolved.is_err(), "missing _FILE path must fail closed");
     }
 }
