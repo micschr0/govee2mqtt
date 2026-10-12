@@ -1,6 +1,6 @@
 # govee2mqtt-Security-Fork – Spezifikation
 
-Stand: 2026-10-12 · Version: 0.8 · Status: FREIGEGEBEN ZUR LOKALEN ENTWICKLUNG
+Stand: 2026-10-12 · Version: 0.9 · Status: FREIGEGEBEN ZUR LOKALEN ENTWICKLUNG
 
 Diese Spezifikation ist die versionierte Quelle der Wahrheit für den Fork.
 Jede Anforderung hat eine ID, eine Begründung und eine messbare Abnahme.
@@ -97,7 +97,17 @@ reale Abnahme, nicht für den lokalen Code-Patch. Keine reale Geräteabnahme
 als bestanden melden. Kein GitHub-Fork, Push, Release oder produktive
 Installation. Der HTTP-Patch darf seit der F2-Freigabe (11.10.2026, 23:02)
 als lokaler Commit auf `security/http-opt-in` festgehalten werden; umgesetzt
-als `59d3b12`. F3 (12.10.2026): Image-Builds laufen auf dem Test-Host, nicht
+als `59d3b12`.
+
+**Nachträge (12.10.2026):** Später erteilte Freigaben erweiterten den Rahmen
+schrittweise: F2 — lokaler Commit `59d3b12`; F5 — Commit `7faf2eb`;
+Expertenteam-Review — Commit `eac6a3e`; Freigabe A — Push des Branches
+`security/http-opt-in` auf den Fork `micschr0/govee2mqtt` (20:49); Freigabe
+„der fork darf ruhig angepasst werden“ — fork-main als lokale
+HA-Custom-Store-Quelle (`e72848f`: `repository.yaml` +
+`govee2mqtt_security_local/`-Export; `00c946f`: `docs/security/` mit
+SPEC- und TEST-MATRIX-Snapshots). Kein PR zu Upstream, kein Release, keine
+produktive Installation; reale Abnahmen bleiben OFFEN. F3 (12.10.2026): Image-Builds laufen auf dem Test-Host, nicht
 auf diesem Gateway; rootless Docker hier ist verworfen. F4 (12.10.2026):
 Reale Abnahme läuft in einem separaten Test-HA; produktives HA ist kein
 Abnahmeziel. F5 (12.10.2026): Warn-Log bei Nicht-Loopback-Bind umgesetzt
@@ -163,3 +173,4 @@ Quellen (Originalabruf 11.10.2026):
 | 0.6 | 2026-10-11 | F1 beantwortet: SKU H60C1 (Pendelleuchte, Variant 51797089779896) nachgetragen; LAN-API-Fähigkeit laut HA-Local-API-Doku, App-Enablement als Abnahmevorbedingung |
 | 0.7 | 2026-10-12 | F3 (Test-Host-Build), F4 (Test-HA-Abnahme), F5 (Warn-Log bei Nicht-Loopback-Bind) dokumentiert; SEC-02 um WB-17-Warnung ergänzt |
 | 0.8 | 2026-10-12 | Expertenteam-Review (3 Reviewer) eingearbeitet: R01 mapped-IPv6-Klassifikation, R02 ENV/FILE-Unit-Tests, R03/R05/R06 Doku, H01/H02/H03 Harness (Commits `eac6a3e`); Abnahmen unverändert OFFEN |
+| 0.9 | 2026-10-12 | Freigabenachträge dokumentiert: Push-Freigabe A (Fork-Branch), fork-main als lokale HA-Store-Quelle (`e72848f`/`00c946f`), SPEC/TEST-MATRIX-Snapshots unter `docs/security/` veröffentlicht |
