@@ -1,0 +1,43 @@
+name: Govee to MQTT Bridge (local security development)
+version: "0.3.0-local-338611708f77"
+slug: govee2mqtt_security_local
+description: Local source build; security acceptance pending
+stage: experimental
+boot: manual_only
+url: https://github.com/wez/govee2mqtt
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: services
+services:
+  - mqtt:need
+
+apparmor: true
+
+# Host network access is required for LAN discovery
+host_network: true
+
+map:
+  - type: addon_config
+    read_only: false
+    path: /app/config
+
+options:
+  temperature_scale: "C"
+
+schema:
+  http_bind: "str?"
+  temperature_scale: "str?"
+  govee_email: "str?"
+  govee_password: "password?"
+  govee_api_key: "password?"
+  mqtt_host: "str?"
+  mqtt_port: "int?"
+  mqtt_username: "str?"
+  mqtt_password: "password?"
+  debug_level: "str?"
+  no_multicast: "bool?"
+  broadcast_all: "bool?"
+  global_broadcast: "bool?"
+  scan: "str?"
