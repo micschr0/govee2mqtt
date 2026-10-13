@@ -18,6 +18,16 @@ Vorhandene, unangetastete Upstream-Workflows: `build.yml` (Container-Build nach
 `ghcr.io/wez/govee2mqtt` — im Fork ohne Schreibrecht auf den wez-Namespace),
 `pr.yml` (Cargo build/test/fmt), `no-response.yml` (Issue-Automation).
 
+
+## Entfernte Upstream-Workflows (Fork, 2026-10-13)
+
+`build.yml` (Container Build), `pr.yml` und `no-response.yml` wurden am Fork
+gelöscht (Michaels Auftrag): Der Fork-Container-Build erzeugte ein Image des
+ungepatchten Upstream-Baseline-Spiegels, das von nichts referenziert wird
+(unser Store-Add-on baut bewusst lokal ohne `image:`) — und failte am Fork
+ohnehin. `pr.yml`/`no-response.yml` sind Upstream-Community-Tools ohne
+Fork-Bezug. Bei Upstream-Rebase fallen die Löschungen als Konflikte auf und
+werden bewusst so gehalten (Dokumentation statt .gitattributes-Maskierung).
 ## Bewusste Auslassungen (Stand heute)
 
 * **Rust 1.94.0 statt stable** in `rust.yml` — der Pin ist Abnahme-Basis
