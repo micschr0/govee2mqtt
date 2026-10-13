@@ -1,18 +1,21 @@
 name: rust
 
 on:
+  # The published product is the HA store mirror (govee2mqtt_security_local).
+  # The top-level source tree on main is the untouched upstream baseline
+  # mirror — CI on it fails under the pinned toolchain and tests code we
+  # never ship. Run rust CI only when the shipped source or this workflow
+  # changes.
   push:
     branches: [main]
-    paths-ignore:
-      - docs/**
-      - '**.md'
-      - 'govee2mqtt_security_local/**' # HA-Store-Spiegel: Spiegel-Änderungen lösen kein Rust-CI aus
+    paths:
+      - 'govee2mqtt_security_local/local-source/**'
+      - '.github/workflows/rust.yml'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - docs/**
-      - '**.md'
-      - 'govee2mqtt_security_local/**'
+    paths:
+      - 'govee2mqtt_security_local/local-source/**'
+      - '.github/workflows/rust.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,6 +29,10 @@ jobs:
     name: fmt, clippy, test, build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    defaults:
+      run:
+        # The shipped add-on source, not the upstream baseline mirror.
+        working-directory: govee2mqtt_security_local/local-source
     permissions:
       contents: read # checkout requires contents:read for actions/checkout
       pull-requests: write # scttnlsn/covrs posts PR comments and annotations
@@ -67,10 +74,11 @@ jobs:
 
       - name: Generate coverage data (lcov)
         run: cargo llvm-cov --locked --lcov --output-path lcov.info
+        working-directory: govee2mqtt_security_local/local-source
 
       - name: Coverage PR comment
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         uses: scttnlsn/covrs@0a048b99b9b4b8aaa5d006d60caaf55c8a13c11d # v0.3.2
         with:
-          coverage-files: lcov.info
+          coverage-files: govee2mqtt_security_local/local-source/lcov.info
           annotate: true
