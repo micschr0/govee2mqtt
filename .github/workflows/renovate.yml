@@ -1,0 +1,65 @@
+name: Renovate
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: "Log level"
+        required: false
+        default: "info"
+        type: choice
+        options:
+          - debug
+          - info
+          - warn
+
+concurrency:
+  group: renovate-${{ github.ref }}
+  cancel-in-progress: false
+
+# Default deny-all. Token for pushing commits/PRs comes from the GitHub App,
+# not from GITHUB_TOKEN. Läuft erst, wenn Michael die Secrets
+# RENOVATE_APP_ID + RENOVATE_PRIVATE_KEY angelegt hat (siehe docs/ci-cd.md),
+# oder wird zugunsten der gehosteten Renovate-App entfernt.
+permissions: {}
+
+jobs:
+  renovate:
+    # Skip until the secrets exist — otherwise the 03:00 cron fails red.
+    if: ${{ secrets.RENOVATE_APP_ID != '' && secrets.RENOVATE_PRIVATE_KEY != '' }}
+    name: Renovate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: app-token
+        with:
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_PRIVATE_KEY }}
+          owner: "micschr0"
+          repositories: "govee2mqtt"
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-workflows: write
+          permission-statuses: write
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: renovatebot/github-action@6d26fcf0275dc65624cbc3d51fe78bc773f98321 # v46.3.6
+        with:
+          configurationFile: renovate.json
+          token: ${{ steps.app-token.outputs.token }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: "false"
+          LOG_LEVEL: ${{ inputs.logLevel || 'info' }}

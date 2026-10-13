@@ -1,0 +1,10 @@
+# https://github.com/gitleaks/gitleaks
+title = "govee2mqtt security fork gitleaks config"
+
+# Allow-list: bekannte Falschpositive.
+[allowlist]
+  description = "global allow list"
+  paths = [
+    '''Cargo\.lock''',
+    '''govee2mqtt_security_local/.*''', # HA-Store-Spiegel: SOURCE.json enthält SHA256-Datei-Hashes (generic-api-key-Falschpositive); dort liegen keine Originale, nur byte-identische Spiegel
+  ]
