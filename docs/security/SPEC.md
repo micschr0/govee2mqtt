@@ -1,6 +1,6 @@
 # govee2mqtt-Security-Fork – Spezifikation
 
-Stand: 2026-10-12 · Version: 0.9 · Status: FREIGEGEBEN ZUR LOKALEN ENTWICKLUNG
+Stand: 2026-10-13 · Version: 1.0 · Status: FREIGEGEBEN ZUR LOKALEN ENTWICKLUNG
 
 Diese Spezifikation ist die versionierte Quelle der Wahrheit für den Fork.
 Jede Anforderung hat eine ID, eine Begründung und eine messbare Abnahme.
@@ -174,3 +174,4 @@ Quellen (Originalabruf 11.10.2026):
 | 0.7 | 2026-10-12 | F3 (Test-Host-Build), F4 (Test-HA-Abnahme), F5 (Warn-Log bei Nicht-Loopback-Bind) dokumentiert; SEC-02 um WB-17-Warnung ergänzt |
 | 0.8 | 2026-10-12 | Expertenteam-Review (3 Reviewer) eingearbeitet: R01 mapped-IPv6-Klassifikation, R02 ENV/FILE-Unit-Tests, R03/R05/R06 Doku, H01/H02/H03 Harness (Commits `eac6a3e`); Abnahmen unverändert OFFEN |
 | 0.9 | 2026-10-12 | Freigabenachträge dokumentiert: Push-Freigabe A (Fork-Branch), fork-main als lokale HA-Store-Quelle (`e72848f`/`00c946f`), SPEC/TEST-MATRIX-Snapshots unter `docs/security/` veröffentlicht |
+| 1.0 | 2026-10-13 | M6=B (Michael, 19:23): audit-sauberes Dependency-Update (`deps/2026-10-13`, 213 Pakete) wird VOR der Abnahme eingebracht — Abnahme-Basis ist ab jetzt das Lock aus `16ebe55` (cargo-audit 0 Funde); Toolchain-Pin 1.94.0 unangetastet |

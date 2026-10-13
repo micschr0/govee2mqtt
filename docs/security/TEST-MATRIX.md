@@ -1,6 +1,6 @@
 # Test-Matrix – govee2mqtt-Security-Fork
 
-Stand: 2026-10-12 · Status: PRÜFPLAN FREIGEGEBEN; ABNAHMEN OFFEN
+Stand: 2026-10-13 · Version: 1.0 · Status: PRÜFPLAN FREIGEGEBEN; ABNAHMEN OFFEN
 
 Jede Zeile verknüpft eine Anforderung mit einem Szenario, einer Prüfmethode
 und dem Nachweis. Eine Anforderung gilt erst als erfüllt, wenn Evidenz vorliegt.
@@ -33,7 +33,7 @@ und dem Nachweis. Eine Anforderung gilt erst als erfüllt, wenn Evidenz vorliegt
 - [x] TBD-02 Nutzerangabe erfasst: neueste HA-Version, Mosquitto Broker 7.1.1
 - [ ] Exakte HA-Core-/Supervisor- und Broker-Daemon-/App-Versionen im Testnachweis protokolliert
 - [x] TBD-05 geklärt: Upstream-Baseline 6f5a8449ca63da8bdc7cc696288a993681ff2a69 (SPEC v0.3)
-- [x] Lokaler Entwicklungscheckout mit lauffähigem Build vorhanden (kein veröffentlichter GitHub-Fork)
+- [x] Lokaler Entwicklungscheckout mit lauffähigem Build vorhanden (Fork `micschr0/govee2mqtt` seit 12.10. veröffentlicht: Branch-Push per Freigabe A, fork-main per Freigabe 23:02 als lokale HA-Store-Quelle)
 
 ## Änderungshistorie
 
@@ -47,10 +47,12 @@ und dem Nachweis. Eine Anforderung gilt erst als erfüllt, wenn Evidenz vorliegt
 | 0.6 | 2026-10-12 | WB-17 (F5) umgesetzt: LOCAL-14 ergänzt; LOCAL-05 auf MQTT-01-Identitätsfelder präzisiert (sw_version ist Build-Metadatum; Erstfehllauf erhalten); F3 (Test-Host-Build) und F4 (Test-HA) dokumentiert |
 | 0.7 | 2026-10-12 | Expertenteam-Review eingearbeitet: LOCAL-15 (Commit `eac6a3e`), Präambel/PKG-06/Abschluss true-up, PKG-03/04-F3-Hinweis |
 | 0.8 | 2026-10-12 | Autonome Fortführung (Auftrag 20:51): LOCAL-16 ergänzt (EXP-H08 Cloud-503-Phase), H06-Fixture-Dedup umgesetzt (lan-regression nutzt lan_fixture), [TEST-HOST-RUNBOOK.md](TEST-HOST-RUNBOOK.md) angelegt (WB-19), WB-13-Inventar erstellt |
+| 0.9 | 2026-10-13 | Expert-Review-Runde 2 (3 Fach-Reviewer, [research/expert-review-2026-10-13-*.md](research/expert-review-2026-10-13-sdlc.md)): Grenzsatz Push/Fork true-upet (EXP-SD-01), Versionszeile im Header (SD-02), LOCAL-14/15-Provenanz-Fußnoten (SD-04), LOCAL-17 (RB-Top-3-Fixes, Commit `7545597`) |
+| 1.0 | 2026-10-13 | M6=B umgesetzt: LOCAL-18 (Deps-Adoption `16ebe55`, Audit 0 Funde, Suite+Harness komplett PASS, neuer Store-Export `http-deps-m6b`) |
 
 ## Lokale Patchprüfungen – keine reale Geräte-/HA-Abnahme
 
-Prüfdatum 2026-10-12; laufend nachgezogen (ursprünglich 2026-10-11, SPEC v0.3-Ära). Umgebung:
+Prüfdatum 2026-10-13; laufend nachgezogen (ursprünglich 2026-10-11, SPEC v0.3-Ära). Umgebung:
 [environment.json](evidence/environment.json). Baseline-SHA vollständig fixiert,
 Cargo.lock unverändert. `security/http-opt-in` ist ein lokaler Branch mit F2-Commit `59d3b12`
 (Elternteil von `59d3b12`: Baseline `6f5a8449…`); kein Push. Lokale Commits:
@@ -74,9 +76,13 @@ uncommittierte Arbeitsbaumänderungen vor.
 | LOCAL-11 / ROB-01 (lokal) | Cloud während des gesamten 300-s-Laufs nicht erreichbar (Proxy auf geschlossenen Port); MQTT verbunden, Prozess läuft ohne Ausfall, kein Listener | PASS als lokale Simulation; wiederholte Ausfälle und reale Netzisolation OFFEN | [11 Runtimefälle](evidence/patch-smoke.json), [Lauf](evidence/patch-http-off.log) |
 | LOCAL-12 / ROB-01 (lokal) | Echtes gepatchtes Binary: 3 komplette MQTT-Ausfall-/Erholungszyklen (je 8 s Broker-Stop) bei dauerhaft fehlender Cloud (Proxy geschlossen, keine Credentials); je Zyklus Prozess lebt, MQTT verbindet sich neu, MQTT→LAN ON/OFF erreicht die Fixture; kein eigener Listener; 10 Cloud-Fehler ohne Absturz | PASS als lokale Simulation; echte Cloud-Ausfälle/reale Netzisolation OFFEN | [Ergebnis](evidence/cycles-result.json), [Lauf](evidence/cycles-service.log), [Skript](cloud_cycles.py) |
 | LOCAL-13 / MQTT-01 (lokal) | Zwei aufeinanderfolgende Dienstläufe gegen dieselbe synthetische H6022-Fixture: identische Discovery-Payload-Mengen (Topics, Payloads bytegleich, unique_ids eindeutig) und identisch mit Upstream-Baseline | PASS als lokaler Vor-Check (Astra ASTRA-09); reale HA-Entity-Zählung OFFEN; mit WB-17-Binary wiederholt PASS | [Ergebnis](evidence/discovery-restart.json), [Skript](discovery_restart.py) |
-| LOCAL-14 / SEC-02 | WB-17 (F5): Warn-Log bei Nicht-Loopback-Bind — zwei Klassifikationstests (Unit) + Laufzeitfall `http-nonloopback-warn` mit unbindbarer TEST-NET-1-Adresse (kein Listener entsteht, Prozess scheitert am Bind, Warnung im Log); Loopback-Fall bleibt still; 10/10 Smoke-Fälle | PASS, lokale Ausführung; Commit `7faf2eb` auf `security/http-opt-in` (kein Push); 37 Tests, fmt, strenges Clippy all-targets+Binary, LAN-Regression, LOCAL-12/13 mit WB-17 wiederholt PASS | [Smoke 10 Fälle (Stand `7faf2eb`)](evidence/patch-smoke.json), [Warn-Log](evidence/patch-nonloopback-warn.log), [Tests](evidence/wb17-test.log), [fmt](evidence/wb17-fmt.log), [Clippy](evidence/wb17-clippy.log), [Export](evidence/wb17-package-inspection.json) |
-| LOCAL-15 / SEC-01/02, MQTT-01, ROB-01 | Expertenteam-Review-Fixes (EXP-R01/R02/R03/R05/R06, EXP-H01/H02/H03): mapped-IPv6-Loopback-Klassifikation, ENV-/FILE-Unit-Tests (fail-closed), `[::]`-Parse-Test, `_FILE`-Doku + Kurzschluss-Satz, build.rs-HEAD-Rebuild-Trigger, Präzedenz-Zweitportfall, Proxy-Scrub beider Schreibweisen, XDG-Cache pro Label, git_head/dirty/sw_version in allen Result-JSONs | PASS: Commit `eac6a3e` (kein Push); 42 Tests, fmt, strenges Clippy all-targets+Binary, 11/11 Smoke-Fälle, LAN-Regression, LOCAL-12/13 wiederholt PASS; Pakettests 7/7; Export `http-review/` 82 Hashchecks | [Tests](evidence/exp-test.log), [fmt](evidence/exp-fmt.log), [Clippy](evidence/exp-clippy.log), [Smoke+Meta](evidence/patch-smoke.json), [Pakettests](evidence/exp-package-tests.log), [Exportprüfung](evidence/http-review-package-inspection.json) |
+| LOCAL-14 / SEC-02 | WB-17 (F5): Warn-Log bei Nicht-Loopback-Bind — zwei Klassifikationstests (Unit) + Laufzeitfall `http-nonloopback-warn` mit unbindbarer TEST-NET-1-Adresse (kein Listener entsteht, Prozess scheitert am Bind, Warnung im Log); Loopback-Fall bleibt still; 10/10 Smoke-Fälle (Provenanz EXP-SD-04: Stand `7faf2eb` nur prose erhalten; aktuelle 11-Fälle-JSON s. LOCAL-15) | PASS, lokale Ausführung; Commit `7faf2eb` auf `security/http-opt-in` (kein Push); 37 Tests, fmt, strenges Clippy all-targets+Binary, LAN-Regression, LOCAL-12/13 mit WB-17 wiederholt PASS | [Smoke 10 Fälle (Stand `7faf2eb`)](evidence/patch-smoke.json), [Warn-Log](evidence/patch-nonloopback-warn.log), [Tests](evidence/wb17-test.log), [fmt](evidence/wb17-fmt.log), [Clippy](evidence/wb17-clippy.log), [Export](evidence/wb17-package-inspection.json) |
+| LOCAL-15 / SEC-01/02, MQTT-01, ROB-01 | Expertenteam-Review-Fixes (EXP-R01/R02/R03/R05/R06, EXP-H01/H02/H03): mapped-IPv6-Loopback-Klassifikation, ENV-/FILE-Unit-Tests (fail-closed), `[::]`-Parse-Test, `_FILE`-Doku + Kurzschluss-Satz, build.rs-HEAD-Rebuild-Trigger, Präzedenz-Zweitportfall, Proxy-Scrub beider Schreibweisen, XDG-Cache pro Label, git_head/dirty/sw_version in allen Result-JSONs | PASS: Commit `eac6a3e` (kein Push); 42 Tests, fmt, strenges Clippy all-targets+Binary, 11/11 Smoke-Fälle, LAN-Regression, LOCAL-12/13 wiederholt PASS; Pakettests 7/7; Export `http-review/` 82 Hashchecks. Provenanz (EXP-SD-04): Suite lief unmittelbar vor dem Commit am identischen dirty tree (meta-JSON belegt git_head `7faf2eb` + dirty); historische 9-/10-Fälle-Stände nur prose erhalten | [Tests](evidence/exp-test.log), [fmt](evidence/exp-fmt.log), [Clippy](evidence/exp-clippy.log), [Smoke+Meta](evidence/patch-smoke.json), [Pakettests](evidence/exp-package-tests.log), [Exportprüfung](evidence/http-review-package-inspection.json) |
 | LOCAL-16 / ROB-01 (lokal) | cloud_cycles.py `--cloud-error-phase 20`: nach 3 MQTT-Ausfallzyklen läuft 20 s ein 503-Responder auf dem reservierten Loopback-Proxy-Port (Cloud –erreichbar, aber fehlernd“), danach Rückkehr auf geschlossenen Port; je prüfen: Dienst lebt, MQTT bleibt verbunden, LAN ON/OFF erreicht die Fixture während und nach der Phase, kein eigener TCP-Listener | PASS als lokale Simulation (4 503-Requests beobachtet, turns [1,0,1], reconnects 5); echte Cloud-Recovery (mit Credentials) und reale Netzisolation OFFEN (EXP-H08) | [Ergebnis](evidence/cycles-result.json), [Servicelog](evidence/cycles-service.log), [Skript](cloud_cycles.py) |
+
+| LOCAL-17 / SEC-02, alle | Expert-Review-Runde 2, gefahrlose Fixes (research/expert-review-2026-10-13-rust.md): EXP-RB-02 PID-Suffix für `_FILE`-Test-Temp-Pfade, In-tree-Test „bindet exakt auf konfigurierter Loopback-Adresse", EXP-RB-03 build.rs `.git/refs`-Trigger + Grenz-Kommentar | PASS: Commit `7545597` (kein Push); 43 Tests, fmt, strenges Clippy all-targets+Binary | [Tests](evidence/exp2-test.log), [Clippy](evidence/exp2-clippy.log), [Build](evidence/exp2-build.log), [Review](research/expert-review-2026-10-13-rust.md) |
+
+| LOCAL-18 / alle (M6=B-Basis) | Deps-Adoption `16ebe55` (Michael 13.10. 19:23 „2 B“): geprüftes Lock aus `deps/2026-10-13` auf den Security-Zweig; Suite build/fmt/strenges Clippy all-targets+Binary/43 Tests; cargo-audit **0 Vulnerabilities, 0 Unsound** (vorher 12+3 gegen altes Lock); volle Harness-Suite am committeten Stand: 300-s-Smoke 11/11, LAN-Regression, Cloud-Zyklen inkl. 503-Phase, Discovery-Restart — alles PASS, Result-JSONs belegen git_head `16ebe55` | PASS: Commit `16ebe55` (Branch auf Fork gepusht per Freigabe A); neuer Store-Export `local-package/http-deps-m6b/` (0.3.0-local-611251d511d3) | [Suite](evidence/deps3-test.log), [Audit](evidence/cargo-audit-new-lock.log), [Smoke+Meta](evidence/patch-smoke.json), [Zyklen](evidence/cycles-result.json), [Discovery](evidence/discovery-restart.json), [Export](local-package/http-deps-m6b/) |
 
 Grenzen: H6022 ist ausschließlich eine Testfixture, **nicht Michaels SKU**.
 HTTP(S)-Proxy-Verweigerung ist keine vollständige Netznamespace-Isolation.
@@ -103,9 +109,11 @@ Prüfdatum 2026-10-11. Details: [Paketierungsbericht](local-package/PACKAGING-RE
 | PKG-03 / SEC-01, SEC-02 | amd64-Ziel: Rust-/HA-OCI-Digests und Architektur prüfen; Imagebuild linux/amd64 | Manifeste PASS; Gateway-Build verworfen (F3, 12.10.); Ausführung auf dem Test-Host OFFEN (dort zusätzlich QEMU/binfmt nötig) | [Manifeste](local-package/evidence/architecture-manifests.json), [Historie](local-package/PACKAGING-REPORT.md) |
 | PKG-04 / SEC-01, SEC-02 | aarch64-Ziel: Rust-/HA-OCI-Digests und Architektur prüfen; Imagebuild linux/arm64 | Manifeste PASS; Gateway-Build verworfen (F3, 12.10.); nativer Build auf dem Test-Host OFFEN | [Manifeste](local-package/evidence/architecture-manifests.json), [Historie](local-package/PACKAGING-REPORT.md) |
 | PKG-05 / MQTT-01, LAN-01 | App-Konfiginspektion: MQTT service/schema, LAN host_network, AppArmor bleiben; Cloud-Credentials nicht Default; WebUI/Ingress nicht Standard | PASS als Inspektion; HA-/Discovery-/Geräteverhalten OFFEN | [Konfiginspektion](local-package/evidence/package-inspection.json), [Grenzen](local-package/PACKAGING-REPORT.md) |
-| PKG-06 / alle Req | Frisch exportiertes HTTP-gepatchtes Image in separat autorisiertem Test-HA installieren und SPEC-Abnahmen ausführen | OFFEN / NICHT AUSGEFÜHRT; designierter F3-Buildinput: [local-package/http-review/](local-package/http-review/) (0.3.0-local-d4fd5a20ea11, enthält HTTP-Patch + WB-17 + Review-Fixes, 82 Hashchecks) | [Exportprüfung](evidence/http-review-package-inspection.json), [Anleitung](local-package/PACKAGING-REPORT.md) |
+| PKG-06 / alle Req | Frisch exportiertes HTTP-gepatchtes Image in separat autorisiertem Test-HA installieren und SPEC-Abnahmen ausführen | OFFEN / NICHT AUSGEFÜHRT; designierter F3-Buildinput seit M6=B (13.10. 19:23): [local-package/http-deps-m6b/](local-package/http-deps-m6b/) (0.3.0-local-611251d511d3, Quell-HEAD `16ebe55`, enthält HTTP-Patch + WB-17 + Review-Fixes + audit-sauberes Lock, 82 Hashchecks; `http-review/` überholt) | [Exportprüfung](evidence/http-review-package-inspection.json), [Anleitung](local-package/PACKAGING-REPORT.md) |
 
 Unverändert: alle realen SPEC-Abnahmen bleiben OFFEN. Keine produktive
-HA-Installation, Publikation, Release oder Push durchgeführt; die lokalen
-Commits auf `security/http-opt-in` sind `59d3b12` (F2, 11.10.), `7faf2eb`
-(F5, 12.10.) und `eac6a3e` (Review-Fixes, 12.10.) — kein Push.
+HA-Installation, kein Release. Kein Push zu `origin`/Upstream (wez) und
+kein PR; Pushes ausschließlich auf den per Freigaben autorisierten Fork
+`micschr0/govee2mqtt`: Branch `security/http-opt-in` = `eac6a3e`
+(`59d3b12` F2 + `7faf2eb` F5 + `eac6a3e` Review-Fixes), fork-main als
+HA-Store-Quelle (`e72848f`/`00c946f`/`3472055`).

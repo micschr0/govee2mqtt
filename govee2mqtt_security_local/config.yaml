@@ -1,5 +1,5 @@
 name: Govee to MQTT Bridge (local security development)
-version: "0.3.0-local-d4fd5a20ea11"
+version: "0.3.0-local-611251d511d3"
 slug: govee2mqtt_security_local
 description: Local source build; security acceptance pending
 stage: experimental
