@@ -1004,7 +1004,6 @@ impl HttpRequestFailed {
     /// application-level statuses (e.g. 454 for "2FA required") in the JSON
     /// body even when the HTTP transport status is 200, so this may be a
     /// non-standard code.
-    #[allow(unused)]
     pub fn status(&self) -> reqwest::StatusCode {
         self.status
     }

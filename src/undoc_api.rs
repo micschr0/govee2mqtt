@@ -329,7 +329,12 @@ impl GoveeUndocumentedApi {
                     topic: Redacted(String::new()),
                 };
 
-                Ok(CacheComputeResult::Value(resp))
+                // EXP-RC-02: keep the cached entry only as long as the token
+                // is actually valid, never past its `exp`.
+                Ok(CacheComputeResult::WithTtl(
+                    resp,
+                    community_cache_ttl(token_expire_cycle),
+                ))
             },
         )
         .await
@@ -337,6 +342,15 @@ impl GoveeUndocumentedApi {
 
     pub fn invalidate_community_synthetic(&self) {
         crate::cache::invalidate_key("undoc-api", "account-info-community").ok();
+    }
+
+    /// A 401 on a community-authenticated call means the cached community
+    /// credentials are dead. Drop both derived entries so the next call
+    /// re-logs-in instead of replaying the stale token until its file-backed
+    /// cache TTL expires (review EXP-RC-01).
+    fn invalidate_community_caches(&self) {
+        self.invalidate_community_login();
+        self.invalidate_community_synthetic();
     }
 
     #[allow(dead_code)]
@@ -365,6 +379,9 @@ impl GoveeUndocumentedApi {
 
         if response.status() == reqwest::StatusCode::UNAUTHORIZED {
             self.invalidate_account_login();
+            // The caller may have used the community fallback token; drop it
+            // too so a dead token cannot be replayed from cache (EXP-RC-01).
+            self.invalidate_community_caches();
         }
 
         let resp: DevicesResponse = http_response_body(response).await?;
@@ -533,7 +550,10 @@ impl GoveeUndocumentedApi {
                     .await?;
 
                 if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-                    self.invalidate_community_login();
+                    // Drop both community entries: the synthetic account-info
+                    // is derived from this login and must not outlive it
+                    // (EXP-RC-01).
+                    self.invalidate_community_caches();
                 }
 
                 let resp: OneClickResponse = http_response_body(response).await?;
@@ -804,13 +824,31 @@ pub struct OneClickIotRuleDevice {
 /// the cleanest signal, but the response cache (see `cache.rs`) renders compute
 /// errors to a string before returning them, which erases the concrete error
 /// type. Matching `code 454` (emitted by `HttpRequestFailed`'s content) covers
-/// the cached case without the false positives a bare `454` match would risk.
+/// the cached case without the false positives a bare `454` match would risk;
+/// trailing digits are rejected so `code 4540` does not match (EXP-RC-05).
 fn is_2fa_login_block(err: &anyhow::Error) -> bool {
     if HttpRequestFailed::from_err(err).map(|e| e.status().as_u16()) == Some(454) {
         return true;
     }
-    let rendered = format!("{err:#}");
-    rendered.contains("code 454") || rendered.contains("status 454")
+    contains_code_454(&format!("{err:#}"))
+}
+
+/// Word-boundary match for the rendered error chain: `code 454` must not
+/// also match a longer code such as `code 4540` (review EXP-RC-05).
+fn contains_code_454(rendered: &str) -> bool {
+    ["code 454", "status 454"].iter().any(|needle| {
+        rendered.find(needle).is_some_and(|idx| {
+            !rendered[idx + needle.len()..].starts_with(|c: char| c.is_ascii_digit())
+        })
+    })
+}
+
+/// Cache the synthetic account-info entry only as long as the underlying
+/// token is actually valid: a token expiring sooner than the default
+/// half-day window must not be served past its `exp` (review EXP-RC-02).
+/// The floor avoids a login storm for near-expiry tokens.
+fn community_cache_ttl(token_expire_cycle_secs: u32) -> Duration {
+    Duration::from_secs((token_expire_cycle_secs as u64).clamp(60, HALF_DAY.as_secs()))
 }
 
 /// Decode the claims (the second, payload segment) of a JWT without verifying
@@ -1208,5 +1246,22 @@ mod test {
         assert!(!is_2fa_login_block(&err));
         let err = anyhow::anyhow!("network timeout");
         assert!(!is_2fa_login_block(&err));
+    }
+
+    #[test]
+    fn does_not_flag_longer_codes() {
+        // EXP-RC-05: `code 4540` is a different status, not a 2FA block.
+        let err = anyhow::anyhow!("login failed with code 4540 <unknown status code>");
+        assert!(!is_2fa_login_block(&err));
+        let err = anyhow::anyhow!("unexpected status 4541 from login");
+        assert!(!is_2fa_login_block(&err));
+    }
+
+    #[test]
+    fn community_cache_ttl_follows_token_exp() {
+        // EXP-RC-02: the synthetic cache entry must not outlive the token.
+        assert_eq!(community_cache_ttl(3600), Duration::from_secs(3600));
+        assert_eq!(community_cache_ttl(10), Duration::from_secs(60));
+        assert_eq!(community_cache_ttl(u32::MAX), HALF_DAY);
     }
 }
