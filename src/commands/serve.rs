@@ -504,7 +504,11 @@ mod tests {
     fn env_opt_in_file_variant_reads_parses_and_fails_closed() {
         let name = "GOVEE_TEST_HTTP_BIND_FILE_VARIANT";
         let file_name = "GOVEE_TEST_HTTP_BIND_FILE_VARIANT_FILE";
-        let path = std::env::temp_dir().join("govee-test-http-bind-file-variant");
+        // PID suffix keeps the temp path unique across concurrent runs (EXP-RB-02).
+        let path = std::env::temp_dir().join(format!(
+            "govee-test-http-bind-file-variant-{}",
+            std::process::id()
+        ));
 
         std::fs::write(&path, "[::1]:18057\n").unwrap();
         std::env::set_var(file_name, &path);
@@ -526,11 +530,47 @@ mod tests {
     fn env_opt_in_missing_file_fails_closed() {
         let name = "GOVEE_TEST_HTTP_BIND_FILE_MISSING";
         let file_name = "GOVEE_TEST_HTTP_BIND_FILE_MISSING_FILE";
-        let path = std::env::temp_dir().join("govee-test-http-bind-file-missing");
+        // PID suffix keeps the temp path unique across concurrent runs (EXP-RB-02).
+        let path = std::env::temp_dir().join(format!(
+            "govee-test-http-bind-file-missing-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_file(&path);
         std::env::set_var(file_name, &path);
         let resolved: anyhow::Result<Option<std::net::SocketAddr>> = crate::opt_env_var(name);
         std::env::remove_var(file_name);
         assert!(resolved.is_err(), "missing _FILE path must fail closed");
+    }
+
+    // Bind exactly on the configured address, in-tree: the runtime smoke
+    // suite proves this externally; this keeps the property next to the code
+    // (review EXP-RB Top-3).
+    #[tokio::test]
+    async fn http_server_binds_exactly_on_configured_loopback_port() {
+        use crate::service::http::run_http_server;
+        use crate::service::state::State;
+        use std::sync::Arc;
+
+        let state = Arc::new(State::new());
+        let reservation = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let addr = reservation.local_addr().unwrap();
+        drop(reservation);
+
+        let server = tokio::spawn(async move { run_http_server(state, addr).await });
+        // The listener appears on exactly the configured address (and only there).
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                if tokio::net::TcpStream::connect(("127.0.0.1", addr.port()))
+                    .await
+                    .is_ok()
+                {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .expect("http server did not become reachable");
+        server.abort();
     }
 }
