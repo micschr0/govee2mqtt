@@ -6,5 +6,9 @@ title = "govee2mqtt security fork gitleaks config"
   description = "global allow list"
   paths = [
     '''Cargo\.lock''',
-    '''govee2mqtt_security_local/.*''', # HA-Store-Spiegel: SOURCE.json enthält SHA256-Datei-Hashes (generic-api-key-Falschpositive); dort liegen keine Originale, nur byte-identische Spiegel
+    # Nur SOURCE.json: ihre SHA256-Datei-Hashes lösen generic-api-key-
+    # Falschpositive aus (verifiziert 2026-10-13: alle 7 Vollhistorie-Funde
+    # lagen in dieser Datei). Seit EXP-CICD-07 bewusst auf genau diese Datei
+    # verengt — der Rest des Store-Spiegels bleibt im Secret-Scan.
+    '''govee2mqtt_security_local/SOURCE\.json''',
   ]

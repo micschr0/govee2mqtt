@@ -8,7 +8,10 @@
   "platformAutomerge": false,
   "timezone": "Europe/Berlin",
   "cargo": {
-    "rangeStrategy": "update-lockfile"
+    "rangeStrategy": "update-lockfile",
+    "managerFilePatterns": [
+      "^govee2mqtt_security_local/local-source/Cargo\\.toml$"
+    ]
   },
   "osvVulnerabilityAlerts": true,
   "vulnerabilityAlerts": {

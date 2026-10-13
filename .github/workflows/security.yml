@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Weekly advisory re-scan: new RUSTSEC findings against the shipped lock
+    # surface between pushes (EXP-CICD-06). Cron runs in UTC (Mon 03:00 UTC).
+    - cron: "0 3 * * 1"
   workflow_dispatch:
 
 concurrency:
@@ -33,10 +37,10 @@ jobs:
         # to one standard instead of two.
         env:
           SHELLCHECK_OPTS: -S warning
-        # Lint only OUR workflows. The upstream mirror workflows
-        # (build.yml/pr.yml/no-response.yml) are not our deliverable;
-        # build.yml carries upstream SC2046 shellcheck findings.
-        run: actionlint -color .github/workflows/rust.yml .github/workflows/security.yml .github/workflows/renovate.yml
+        # All workflows in this repo are ours (upstream mirrors removed in
+        # 550e20e); the glob keeps any new workflow linted by default
+        # (EXP-CICD-09) instead of relying on a hand-maintained list.
+        run: actionlint -color .github/workflows/*.yml
 
   shellcheck:
     name: ShellCheck

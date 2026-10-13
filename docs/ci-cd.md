@@ -1,6 +1,6 @@
 # CI/CD im Security-Fork
 
-Stand: 2026-10-13. Vorbild ist der CI/CD-Stack von
+Stand: 2026-10-14 (Review-Runde 3: Store-Integritäts-Gate, Renovate-Cargo-Scoping, Gitleaks-Verengung, Rust-Cache-Ziel, Doku-Korrekturen — EXP-CICD-01/03/05/07/08/09). Vorbild ist der CI/CD-Stack von
 [`micschr0/claudebar`](https://github.com/micschr0/claudebar), übertragen und
 für dieses Rust-Home-Assistant-Repo angepasst.
 
@@ -8,16 +8,12 @@ für dieses Rust-Home-Assistant-Repo angepasst.
 
 | Datei | Aufgabe |
 | --- | --- |
-| `.github/workflows/rust.yml` | `push`/`pull_request` auf `main`: `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo doc`, `cargo test --locked`, `cargo build --locked`, Coverage via `cargo-llvm-cov` + PR-Kommentar (`scttnlsn/covrs`) — **alles gegen die Store-Quelle `govee2mqtt_security_local/local-source`** (das veröffentlichte Produkt), nicht gegen den toten Upstream-Baseline-Spiegel auf oberster Ebene (der unter dem gepinnten 1.94.0-Toolchain klernt 10 Clippy-Basisfehler, die nur auf dem Security-Branch gefixt sind). Toolchain: **Rust 1.94.0** (bis zur SEC-Abnahme gepinnt). Trigger nur bei Änderungen an Store-Quelle oder Workflow. |
-| `.github/workflows/security.yml` | `push`/`pull_request` auf `main` + manueller Trigger: `actionlint` (lintet auch `run:`-Blöcke; nur auf unsere drei Workfiles — Upstream-`build.yml`-SC2046-Funde sind nicht unser Liefergegenstand), `shellcheck` auf `scripts/*.sh`, `cargo audit` (RUSTSEC-Advisories gegen das Lock des Store-Spiegels `govee2mqtt_security_local/local-source` — das Top-Level-Lock ist der unveränderte Upstream-Baseline-Spiegel mit bekannten Funden und bleibt bewusst unverändert), `gitleaks` über die komplette Historie (`fetch-depth: 0`) mit `.gitleaks.toml`. |
-| `.github/workflows/renovate.yml` | Self-hosted Renovate (cron 03:00 Europe/Berlin + manueller Trigger). Benötigt die Secrets `RENOVATE_APP_ID` + `RENOVATE_PRIVATE_KEY` einer GitHub App — ein vorgeschalteter Guard-Step (job-level `if` kennt den `secrets`-Kontext nicht) skipped den Lauf grün mit Notice, bis Michael diese anlegt. Alternative: gehostete „Renovate GitHub App“ installieren und diese Workflow wieder entfernen. |
-| `renovate.json` | Renovate-Konfiguration (Details unten). |
-| `.gitleaks.toml` | Gitleaks-Allowlist: `Cargo.lock` und der HA-Store-Spiegel `govee2mqtt_security_local/**` (dort stehen SHA256-Datei-Hashes in `SOURCE.json`, die `generic-api-key`-Falschpositive auslösen — verifiziert 2026-10-13: alle 7 Vollhistorie-Funde lagen in dieser Datei). |
-
-Vorhandene, unangetastete Upstream-Workflows: `build.yml` (Container-Build nach
-`ghcr.io/wez/govee2mqtt` — im Fork ohne Schreibrecht auf den wez-Namespace),
-`pr.yml` (Cargo build/test/fmt), `no-response.yml` (Issue-Automation).
-
+| `.github/workflows/rust.yml` | `push`/`pull_request` auf `main`: `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo doc`, `cargo test --locked`, `cargo build --locked`, Coverage via `cargo-llvm-cov` + PR-Kommentar (`scttnlsn/covrs`) — **alles gegen die Store-Quelle `govee2mqtt_security_local/local-source`** (das veröffentlichte Produkt), nicht gegen den toten Upstream-Baseline-Spiegel auf oberster Ebene (der unter dem gepinnten 1.94.0-Toolchain klernt 10 Clippy-Basisfehler, die nur auf dem Security-Branch gefixt sind). Toolchain: **Rust 1.94.0** (bis zur SEC-Abnahme gepinnt). `rust-cache` seit Runde 3 explizit auf `govee2mqtt_security_local/local-source` gerichtet + `cache-on-failure` (EXP-CICD-05; das Default-Root-Workspace traf den eigentlichen Build nicht). Trigger nur bei Änderungen an Store-Quelle oder Workflow. |
+| `.github/workflows/security.yml` | `push`/`pull_request` auf `main` + wöchentlicher Schedule (Mo 03:00 UTC — neue RUSTSEC-Funde sollen nicht bis zum nächsten Push warten, EXP-CICD-06) + manueller Trigger: `actionlint` (lintet auch `run:`-Blöcke; Glob über alle `workflows/*.yml` — seit 550e20e sind alle Workflows unsere, EXP-CICD-09), `shellcheck` auf `scripts/*.sh`, `cargo audit` (RUSTSEC-Advisories gegen das Lock des Store-Spiegels `govee2mqtt_security_local/local-source` — das Top-Level-Lock ist der unveränderte Upstream-Baseline-Spiegel mit bekannten Funden und bleibt bewusst unverändert), `gitleaks` über die komplette Historie (`fetch-depth: 0`) mit `.gitleaks.toml`. |
+| `.github/workflows/store-integrity.yml` | **Runde 3 (EXP-CICD-01):** Gate gegen 353efef-Klassen-Zwischenfälle. Bei Änderungen unter `govee2mqtt_security_local/**`: `sha256sum -c SHA256SUMS` über den gesamten Store-Spiegel + Kohärenzcheck `SOURCE.json`/`SOURCE_TAG` (`scripts/check-store-source.py`). Am Stand 344f60f lokal verifiziert grün. |
+| `.github/workflows/renovate.yml` | Self-hosted Renovate (cron `0 3 * * *` — UTC, 05:00 Berlin zur Sommerzeit — + manueller Trigger; die `timezone` in `renovate.json` steuert nur Renovate-interne Schedules, nicht den Workflow-Cron — EXP-CICD-08). Benötigt die Secrets `RENOVATE_APP_ID` + `RENOVATE_PRIVATE_KEY` einer GitHub App — ein vorgeschalteter Guard-Step (job-level `if` kennt den `secrets`-Kontext nicht) skipped den Lauf grün mit Notice, bis Michael diese anlegt. Alternative: gehostete „Renovate GitHub App“ installieren und diese Workflow wieder entfernen. |
+| `renovate.json` | Renovate-Konfiguration (Details unten). Cargo-Manager seit Runde 3 auf `govee2mqtt_security_local/local-source/Cargo.toml` beschränkt (EXP-CICD-03) — der eingefrorene Top-Level-Baseline-Spiegel bleibt für Renovate unsichtbar. |
+| `.gitleaks.toml` | Gitleaks-Allowlist: `Cargo.lock` und `govee2mqtt_security_local/SOURCE.json` (deren SHA256-Datei-Hashes `generic-api-key`-Falschpositive auslösen — verifiziert 2026-10-13: alle 7 Vollhistorie-Funde lagen in dieser Datei). Seit Runde 3 bewusst auf genau diese Datei verengt (EXP-CICD-07); der Rest des Store-Spiegels bleibt im Secret-Scan. |
 
 ## Entfernte Upstream-Workflows (Fork, 2026-10-13)
 
