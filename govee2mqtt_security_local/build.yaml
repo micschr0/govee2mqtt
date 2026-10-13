@@ -1,8 +1,0 @@
-labels:
-  org.opencontainers.image.title: "Home Assistant App: Govee to MQTT Bridge (local development)"
-  org.opencontainers.image.description: "Acts as a bridge between Govee devices and Home Assistant, via the Home Assistant MQTT Integration."
-  org.opencontainers.image.source: "https://github.com/wez/govee2mqtt"
-  org.opencontainers.image.licenses: "MIT"
-
-# Base digests are explicit in Dockerfile; BUILD_FROM is not required.
-# No claim of upstream signing identity for a local, unpublished build.
