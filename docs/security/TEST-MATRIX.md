@@ -1,6 +1,6 @@
 # Test-Matrix – govee2mqtt-Security-Fork
 
-Stand: 2026-10-13 · Version: 1.0 · Status: PRÜFPLAN FREIGEGEBEN; ABNAHMEN OFFEN
+Stand: 2026-10-13 · Version: 1.1 · Status: PRÜFPLAN FREIGEGEBEN; ABNAHMEN OFFEN
 
 Jede Zeile verknüpft eine Anforderung mit einem Szenario, einer Prüfmethode
 und dem Nachweis. Eine Anforderung gilt erst als erfüllt, wenn Evidenz vorliegt.
@@ -19,6 +19,8 @@ und dem Nachweis. Eine Anforderung gilt erst als erfüllt, wenn Evidenz vorliegt
 | LAN-01 | LAN-Gerät schaltet ohne Internetverbindung | Test: Netz isolieren, Gerät schalten | OFFEN | – |
 | ROB-01 | Dienst läuft weiter, wenn Cloud nicht erreichbar | Test: DNS/Route zur Cloud blockieren | OFFEN | – |
 | ROB-01 | Dienst crash-loopt nicht bei wiederholtem Cloud-Ausfall | Test: Mehrfacher Ausfall simulieren | OFFEN | – |
+| CLOUD-01 | 454 vom Primär-Login → Fallback auf Community-Login; Unit-Tests JWT/454-Erkennung; lokale Suite grün | Test: `cargo test` (49 PASS inkl. 7 neuer PR-Tests), clippy `-D warnings` clean, fmt clean, Smoke 9/9 PASS am gepatchten Baum | LOKAL PASS (Commit `458c2e5`) | [patch-smoke.json](evidence/patch-smoke.json); Testlauf 13.10. 23:2x |
+| CLOUD-01 | E2E: Start mit echten Govee-Credentials trotz 2FA-Mauer im Test-HA; Log zeigt Fallback-Warnung; H60C1 steuerbar | Demonstration am Test-HA | OFFEN | – |
 
 ## Prüfarten
 
@@ -48,6 +50,8 @@ und dem Nachweis. Eine Anforderung gilt erst als erfüllt, wenn Evidenz vorliegt
 | 0.7 | 2026-10-12 | Expertenteam-Review eingearbeitet: LOCAL-15 (Commit `eac6a3e`), Präambel/PKG-06/Abschluss true-up, PKG-03/04-F3-Hinweis |
 | 0.8 | 2026-10-12 | Autonome Fortführung (Auftrag 20:51): LOCAL-16 ergänzt (EXP-H08 Cloud-503-Phase), H06-Fixture-Dedup umgesetzt (lan-regression nutzt lan_fixture), [TEST-HOST-RUNBOOK.md](TEST-HOST-RUNBOOK.md) angelegt (WB-19), WB-13-Inventar erstellt |
 | 0.9 | 2026-10-13 | Expert-Review-Runde 2 (3 Fach-Reviewer, [research/expert-review-2026-10-13-*.md](research/expert-review-2026-10-13-sdlc.md)): Grenzsatz Push/Fork true-upet (EXP-SD-01), Versionszeile im Header (SD-02), LOCAL-14/15-Provenanz-Fußnoten (SD-04), LOCAL-17 (RB-Top-3-Fixes, Commit `7545597`) |
+| 1.0 | 2026-10-13 | Nachtrag: Kopf stand bereits auf 1.0 ( Historie lief bis 0.9 hinterher); Zeile gleicht an SPEC 1.0 an (Abnahme-Basis = Lock aus `16ebe55`, M6=B) |
+| 1.1 | 2026-10-13 | CLOUD-01 ergänzt (PR #689-Übernahme, Commit `458c2e5`): lokale Abnahme PASS, E2E am Test-HA OFFEN |
 | 1.0 | 2026-10-13 | M6=B umgesetzt: LOCAL-18 (Deps-Adoption `16ebe55`, Audit 0 Funde, Suite+Harness komplett PASS, neuer Store-Export `http-deps-m6b`) |
 
 ## Lokale Patchprüfungen – keine reale Geräte-/HA-Abnahme

@@ -14,7 +14,7 @@ import tarfile
 # security/http-opt-in (SEC-01/02 + WB-17 warn-log + expert-review fixes).
 # The worktree bundles the committed history plus the uncommitted
 # lint cleanup and packaging changes.
-BASELINE = "16ebe551ed01c357ef31601e10f456a0c11379fa"
+BASELINE = "458c2e59f28aebdb2d33d993dbf936cd81683110"
 
 
 def collect_tree(root, relative, output, prefix=""):

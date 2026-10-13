@@ -1,6 +1,6 @@
 # govee2mqtt-Security-Fork – Spezifikation
 
-Stand: 2026-10-13 · Version: 1.0 · Status: FREIGEGEBEN ZUR LOKALEN ENTWICKLUNG
+Stand: 2026-10-13 · Version: 1.1 · Status: FREIGEGEBEN ZUR LOKALEN ENTWICKLUNG
 
 Diese Spezifikation ist die versionierte Quelle der Wahrheit für den Fork.
 Jede Anforderung hat eine ID, eine Begründung und eine messbare Abnahme.
@@ -86,6 +86,33 @@ MQTT-/LAN-Funktionalität für Michaels Heimnetz zu beeinträchtigen.
   sich wieder her, und innerhalb von 15 min tritt keine Neustart-Serie auf
   (Astra ASTRA-06). Lokal bereits simuliert: LOCAL-12, 3 Ausfallzyklen.
 - **Priorität:** SOLL
+
+### CLOUD-01: Account-Betrieb trotz Govee-2FA-Mauer (Status 454)
+
+- **Soll:** Ist E-Mail/Passwort konfiguriert und blockt Govee den primären
+  Undoc-Login (`app2.govee.com/account/rest/account/v1/login`) mit dem
+  Anwendungsstatus 454 (2FA-Mauer, Upstream-Issue #682), fällt der Dienst
+  auf den Community-API-Login (`community-api.govee.com`) zurück, statt
+  beim Start abzubrechen. Grundlage: Übernahme von Upstream-PR #689
+  (Commit `458c2e5` auf `security/http-opt-in`).
+- **Begründung:** Govee erzwingt seit ca. 03/2026 2FA auf dem App-Login;
+  govee2mqtt kann als Client keinen In-App-Challenge abschließen und
+  crash-loopt beim Start (Michaels Fehlerbild vom 13.10. 23:01). Der
+  Community-Login ist von der 2FA ausgenommen; sein Bearer-Token wird von
+  denselben app2-Endpunkten (IoT-Key, Geräteliste) akzeptiert.
+- **Abnahme:** (a) Unit-Tests zu JWT-Account-ID-Decode und 454-Erkennung
+  (auch aus Cache-Fehlertext) grün; (b) lokale Suite (test/clippy/fmt/
+  Smoke) grün — SEC-01/SEC-02 unbeeinflusst; (c) E2E am Test-HA mit echten
+  Govee-Credentials: Dienst startet ohne Crash-Loop, Log zeigt die
+  Fallback-Warnung, H60C1 bleibt steuerbar. (a)+(b) LOKAL PASS,
+  (c) OFFEN bis zur Abnahme im Test-HA.
+- **Priorität:** MUSS für Account-Betrieb (LAN-only-Betrieb unberührt)
+- **Grenzen:** Beim Fallback liefert der Community-Login kein Account-IoT-
+  Topic; Statusupdates kommen per Geräte-Polling statt Push. Szenen/
+  Tap-to-Run über die Undoc-API bleiben wie upstream unverändert. Kein
+  Verstoß gegen das Nicht-Ziel „Cloud-Funktionen neu implementieren“:
+  begrenzte Reparatur des bestehenden Login-Pfads, ausdrücklich
+  freigegeben (Michael, 13.10. 23:11, „Option 2“).
 
 ## Freigabe und Abnahmegrenzen
 
@@ -175,3 +202,4 @@ Quellen (Originalabruf 11.10.2026):
 | 0.8 | 2026-10-12 | Expertenteam-Review (3 Reviewer) eingearbeitet: R01 mapped-IPv6-Klassifikation, R02 ENV/FILE-Unit-Tests, R03/R05/R06 Doku, H01/H02/H03 Harness (Commits `eac6a3e`); Abnahmen unverändert OFFEN |
 | 0.9 | 2026-10-12 | Freigabenachträge dokumentiert: Push-Freigabe A (Fork-Branch), fork-main als lokale HA-Store-Quelle (`e72848f`/`00c946f`), SPEC/TEST-MATRIX-Snapshots unter `docs/security/` veröffentlicht |
 | 1.0 | 2026-10-13 | M6=B (Michael, 19:23): audit-sauberes Dependency-Update (`deps/2026-10-13`, 213 Pakete) wird VOR der Abnahme eingebracht — Abnahme-Basis ist ab jetzt das Lock aus `16ebe55` (cargo-audit 0 Funde); Toolchain-Pin 1.94.0 unangetastet |
+| 1.1 | 2026-10-13 | CLOUD-01 ergänzt (Michael, 23:11, „Option 2“): Übernahme von Upstream-PR #689 (454-Community-Fallback, Commit `458c2e5`); lokale Abnahme PASS, E2E im Test-HA OFFEN |
