@@ -1,0 +1,71 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices", ":semanticCommits"],
+  "prCreation": "immediate",
+  "rebaseWhen": "auto",
+  "labels": ["dependencies"],
+  "dependencyDashboard": true,
+  "platformAutomerge": false,
+  "timezone": "Europe/Berlin",
+  "cargo": {
+    "rangeStrategy": "update-lockfile"
+  },
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "minimumReleaseAge": "0 days",
+    "schedule": ["at any time"],
+    "automerge": false
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": false,
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "description": "Never pin Cargo crate versions to exact '=' — Cargo.lock gives reproducibility",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["pin"],
+      "enabled": false
+    },
+    {
+      "description": "Group serde ecosystem; UMSCHALT NACH ABNAHME (WB-16/WB-08): automerge auf true setzen",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["serde*"],
+      "groupName": "serde ecosystem",
+      "automerge": false
+    },
+    {
+      "description": "Cargo patch/minor nur als Vorschlag (PR) bis zur Abnahme; UMSCHALT NACH ABNAHME (WB-16/WB-08): automerge auf true setzen; excludes pre-1.0 (semver) and requires the dependency to already exist",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "matchCurrentVersion": "!/^0/",
+      "automerge": false
+    },
+    {
+      "description": "Group GitHub Actions bumps; manual merge (workflow files get secret access on CI run)",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "github-actions",
+      "minimumReleaseAge": "3 days",
+      "automerge": false
+    },
+    {
+      "description": "Major updates always require manual review",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Docker base images / digests OFF bis zur Abnahme: Dockerfile/addon Digests sind Teil der gepinnten Abnahme- und HA-Store-Basis; UMSCHALT NACH ABNAHME (WB-16/WB-08): diese Regel entfernen",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "enabled": false
+    },
+    {
+      "description": "rust-toolchain-Action (dtolnay) OFF bis zur Abnahme: schützt den Rust-1.94.0-Pin in rust.yml; UMSCHALT NACH ABNAHME (WB-16/WB-08): diese Regel entfernen",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["dtolnay/rust-toolchain"],
+      "enabled": false
+    }
+  ]
+}
