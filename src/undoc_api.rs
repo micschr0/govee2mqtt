@@ -442,8 +442,15 @@ impl GoveeUndocumentedApi {
                     .expect("unix epoch in the past")
                     .as_millis();
 
-                let ttl_ms = resp.data.expiredAt as u128 - ts_ms;
-                let ttl = Duration::from_millis(ttl_ms as u64).min(ONE_DAY);
+                // EXP-RC-06 (review round 3): fail closed on an already-
+                // expired token (clock skew or stale server clock); a plain
+                // subtraction would underflow and cache a dead token for up
+                // to a day.
+                let ttl = Duration::from_millis(one_click_ttl_ms(
+                    resp.data.expiredAt,
+                    u64::try_from(ts_ms).unwrap_or(u64::MAX),
+                )?)
+                .min(ONE_DAY);
 
                 Ok(CacheComputeResult::WithTtl(resp.data.token, ttl))
             },
@@ -849,6 +856,16 @@ fn contains_code_454(rendered: &str) -> bool {
 /// The floor avoids a login storm for near-expiry tokens.
 fn community_cache_ttl(token_expire_cycle_secs: u32) -> Duration {
     Duration::from_secs((token_expire_cycle_secs as u64).clamp(60, HALF_DAY.as_secs()))
+}
+
+/// Remaining lifetime in ms of a one-click login token, fail closed
+/// (review EXP-RC-06): an already-expired or clock-skewed expiry must error
+/// instead of underflowing and caching a dead token.
+fn one_click_ttl_ms(expired_at_ms: u64, now_ms: u64) -> anyhow::Result<u64> {
+    expired_at_ms
+        .checked_sub(now_ms)
+        .filter(|ttl| *ttl > 0)
+        .ok_or_else(|| anyhow::anyhow!("one-click login token already expired"))
 }
 
 /// Decode the claims (the second, payload segment) of a JWT without verifying
@@ -1263,5 +1280,13 @@ mod test {
         assert_eq!(community_cache_ttl(3600), Duration::from_secs(3600));
         assert_eq!(community_cache_ttl(10), Duration::from_secs(60));
         assert_eq!(community_cache_ttl(u32::MAX), HALF_DAY);
+    }
+
+    #[test]
+    fn one_click_ttl_fails_closed_on_expired_token() {
+        // EXP-RC-06: an expired/skewed expiry must error, not underflow.
+        assert_eq!(one_click_ttl_ms(5_000, 4_000).unwrap(), 1_000);
+        assert!(one_click_ttl_ms(5_000, 5_000).is_err());
+        assert!(one_click_ttl_ms(4_999, 5_000).is_err());
     }
 }
