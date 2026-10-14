@@ -1,4 +1,4 @@
-# Local security development app – SPEC v0.3
+# Local security development app – SPEC v1.3 (local working state)
 
 This is an **unpublished local source-build recipe**, not an accepted security
 release. The local Rust patch disables HTTP unless an explicit bind address is

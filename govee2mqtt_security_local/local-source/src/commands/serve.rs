@@ -571,6 +571,72 @@ mod tests {
         })
         .await
         .expect("http server did not become reachable");
+        // EXP-RC-07: prove "exactly" in-tree — the kernel must list the
+        // listener on 127.0.0.1 only, never on a wildcard address.
+        #[cfg(target_os = "linux")]
+        assert_eq!(
+            proc_listen_ips(addr.port()),
+            vec![addr.ip().to_string()],
+            "http server must bind exactly on the configured loopback address"
+        );
         server.abort();
+    }
+
+    /// Linux `/proc/net/{tcp,tcp6}` IPs with a LISTEN socket on `port`,
+    /// decoded to their string form — the kernel's ground truth for
+    /// "bound exactly where?" (review EXP-RC-07).
+    #[cfg(target_os = "linux")]
+    fn proc_listen_ips(port: u16) -> Vec<String> {
+        let want_port = format!("{:04X}", port);
+        let mut ips = Vec::new();
+        for (table, v6) in [("/proc/net/tcp", false), ("/proc/net/tcp6", true)] {
+            let Ok(content) = std::fs::read_to_string(table) else {
+                continue;
+            };
+            for line in content.lines().skip(1) {
+                let fields: Vec<&str> = line.split_whitespace().collect();
+                if fields.len() < 4 || fields[3] != "0A" {
+                    continue; // not a LISTEN entry
+                }
+                let mut local = fields[1].split(':');
+                let (Some(ip_hex), Some(port_hex)) = (local.next(), local.next()) else {
+                    continue;
+                };
+                if port_hex != want_port {
+                    continue;
+                }
+                ips.push(decode_proc_ip(ip_hex, v6));
+            }
+        }
+        ips.sort();
+        ips
+    }
+
+    #[cfg(target_os = "linux")]
+    fn decode_proc_ip(hex: &str, v6: bool) -> String {
+        let bytes: Vec<u8> = (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).expect("valid hex ip"))
+            .collect();
+        if v6 {
+            // /proc/net/tcp6 prints each 32-bit word byte-swapped; ::1 ends
+            // in "01000000" (LE word = 1).
+            let mut octets = [0u8; 16];
+            for i in 0..4 {
+                let word = u32::from_le_bytes([
+                    bytes[i * 4],
+                    bytes[i * 4 + 1],
+                    bytes[i * 4 + 2],
+                    bytes[i * 4 + 3],
+                ]);
+                octets[i * 4..i * 4 + 4].copy_from_slice(&word.to_be_bytes());
+            }
+            std::net::Ipv6Addr::from(octets).to_string()
+        } else {
+            // The kernel prints the IPv4 address as a little-endian u32:
+            // 127.0.0.1 appears as "0100007F".
+            let word = u32::from_str_radix(hex, 16).expect("valid hex ip");
+            std::net::Ipv4Addr::from(word.to_le_bytes()).to_string()
+        }
     }
 }
