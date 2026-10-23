@@ -999,6 +999,14 @@ impl HttpRequestFailed {
     pub fn from_err(err: &anyhow::Error) -> Option<&Self> {
         err.root_cause().downcast_ref::<Self>()
     }
+
+    /// The numeric status that Govee reported. Note that Govee embeds
+    /// application-level statuses (e.g. 454 for "2FA required") in the JSON
+    /// body even when the HTTP transport status is 200, so this may be a
+    /// non-standard code.
+    pub fn status(&self) -> reqwest::StatusCode {
+        self.status
+    }
 }
 
 pub async fn json_body<T: serde::de::DeserializeOwned>(
@@ -1114,7 +1122,7 @@ mod test {
 
     #[test]
     fn get_device_scenes() {
-        let resp: GetDeviceScenesResponse = from_json(&SCENE_LIST).unwrap();
+        let resp: GetDeviceScenesResponse = from_json(SCENE_LIST).unwrap();
         k9::assert_matches_snapshot!(format!("{resp:#?}"));
     }
 
@@ -1122,7 +1130,7 @@ mod test {
 
     #[test]
     fn get_device_state() {
-        let resp: GetDeviceStateResponse = from_json(&GET_DEVICE_STATE_EXAMPLE).unwrap();
+        let resp: GetDeviceStateResponse = from_json(GET_DEVICE_STATE_EXAMPLE).unwrap();
         k9::assert_matches_snapshot!(format!("{resp:#?}"));
     }
 
@@ -1132,19 +1140,19 @@ mod test {
     #[test]
     fn list_devices_issue4() {
         let resp: GetDevicesResponse =
-            from_json(&include_str!("../test-data/list_devices_issue4.json")).unwrap();
+            from_json(include_str!("../test-data/list_devices_issue4.json")).unwrap();
         k9::assert_matches_snapshot!(format!("{resp:#?}"));
     }
 
     #[test]
     fn list_devices_2() {
-        let resp: GetDevicesResponse = from_json(&LIST_DEVICES_EXAMPLE2).unwrap();
+        let resp: GetDevicesResponse = from_json(LIST_DEVICES_EXAMPLE2).unwrap();
         k9::assert_matches_snapshot!(format!("{resp:#?}"));
     }
 
     #[test]
     fn list_devices() {
-        let resp: GetDevicesResponse = from_json(&LIST_DEVICES_EXAMPLE).unwrap();
+        let resp: GetDevicesResponse = from_json(LIST_DEVICES_EXAMPLE).unwrap();
         k9::assert_matches_snapshot!(format!("{resp:#?}"));
     }
 

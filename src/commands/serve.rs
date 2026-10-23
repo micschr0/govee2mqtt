@@ -12,6 +12,7 @@ use anyhow::Context;
 use chrono::Utc;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 
@@ -19,9 +20,10 @@ pub static POLL_INTERVAL: Lazy<chrono::Duration> = Lazy::new(|| chrono::Duration
 
 #[derive(clap::Parser, Debug)]
 pub struct ServeCommand {
-    /// The port on which the HTTP API will listen
-    #[arg(long, default_value_t = 8056)]
-    http_port: u16,
+    /// Enable the unauthenticated HTTP API on this IP:port (disabled by default).
+    /// You may also set GOVEE_HTTP_BIND via the environment.
+    #[arg(long)]
+    http_bind: Option<SocketAddr>,
 }
 
 async fn poll_single_device(state: &StateHandle, device: &Device) -> anyhow::Result<()> {
@@ -140,7 +142,7 @@ async fn enumerate_devices_via_undo_api(
     };
 
     log::info!("Querying undocumented API for device + room list");
-    let acct = client.login_account_cached().await?;
+    let acct = client.login_account_or_community().await?;
     let info = client.get_device_list(&acct.token).await?;
     let mut group_by_id = HashMap::new();
     for group in info.groups {
@@ -170,8 +172,45 @@ const ISSUE_76_EXPLANATION: &str = "Startup cannot automatically continue becaus
     metadata availability via the LAN API.";
 
 impl ServeCommand {
+    /// `Ipv6Addr::is_loopback` only recognizes `::1`. An IPv4-mapped IPv6
+    /// bind such as `[::ffff:127.0.0.1]:8056` is effectively an IPv4 loopback
+    /// bind on Linux, so normalize before classifying (review EXP-R01).
+    fn is_effective_loopback(bind: &SocketAddr) -> bool {
+        match bind.ip() {
+            std::net::IpAddr::V4(ip) => ip.is_loopback(),
+            std::net::IpAddr::V6(ip) => match ip.to_ipv4_mapped() {
+                Some(v4) => v4.is_loopback(),
+                None => ip.is_loopback(),
+            },
+        }
+    }
+
+    /// The HTTP API is unauthenticated, so make an opt-in that is reachable
+    /// from the network loud: warn on non-loopback bind addresses (WB-17).
+    /// Loopback binds (the recommended case) stay silent.
+    fn http_bind_warning(bind: &SocketAddr) -> Option<String> {
+        if Self::is_effective_loopback(bind) {
+            return None;
+        }
+        let port = bind.port();
+        Some(format!(
+            "HTTP API enabled on {bind}, a non-loopback address. \
+             The HTTP API is unauthenticated and anyone who can reach {bind} \
+             may control your devices. Prefer 127.0.0.1:{port} or \
+             [::1]:{port} unless network exposure is intended."
+        ))
+    }
+
     pub async fn run(&self, args: &crate::Args) -> anyhow::Result<()> {
+        // Validate before starting discovery or MQTT. CLI takes precedence.
+        let http_bind = match self.http_bind {
+            Some(addr) => Some(addr),
+            None => crate::opt_env_var::<SocketAddr>("GOVEE_HTTP_BIND")?,
+        };
         log::info!("Starting service. version {}", govee_version());
+        if let Some(warning) = http_bind.as_ref().and_then(Self::http_bind_warning) {
+            log::warn!("{warning}");
+        }
         let state = Arc::new(crate::service::state::State::new());
 
         // First, use the HTTP APIs to determine the list of devices and
@@ -350,8 +389,254 @@ impl ServeCommand {
         // start advertising on local mqtt
         spawn_hass_integration(state.clone(), &args.hass_args).await?;
 
-        run_http_server(state.clone(), self.http_port)
-            .await
-            .with_context(|| format!("Starting HTTP service on port {}", self.http_port))
+        match http_bind {
+            Some(addr) => run_http_server(state.clone(), addr)
+                .await
+                .with_context(|| format!("Starting HTTP service on {addr}")),
+            None => {
+                log::info!("HTTP API disabled; MQTT and LAN service remain active");
+                // The HTTP await used to keep the runtime and its background
+                // tasks alive. Without HTTP, retain the same service lifetime.
+                std::future::pending::<anyhow::Result<()>>().await
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ServeCommand;
+    use clap::Parser;
+
+    #[test]
+    fn http_is_not_enabled_by_default() {
+        let command = ServeCommand::try_parse_from(["serve"]).unwrap();
+        assert!(command.http_bind.is_none());
+    }
+
+    #[test]
+    fn http_opt_in_preserves_explicit_ipv4_and_ipv6_addresses() {
+        for address in ["127.0.0.1:18056", "[::1]:18056"] {
+            let command = ServeCommand::try_parse_from(["serve", "--http-bind", address]).unwrap();
+            assert_eq!(command.http_bind, Some(address.parse().unwrap()));
+        }
+    }
+
+    #[test]
+    fn invalid_http_bind_is_rejected() {
+        for address in ["", "localhost:8056", "127.0.0.1", "127.0.0.1:65536"] {
+            assert!(ServeCommand::try_parse_from(["serve", "--http-bind", address]).is_err());
+        }
+    }
+
+    #[test]
+    fn legacy_port_cannot_enable_a_wildcard_listener() {
+        assert!(ServeCommand::try_parse_from(["serve", "--http-port", "8056"]).is_err());
+    }
+
+    #[test]
+    fn wildcard_ipv6_http_bind_parses_but_warns() {
+        let command = ServeCommand::try_parse_from(["serve", "--http-bind", "[::]:8056"]).unwrap();
+        assert_eq!(command.http_bind, Some("[::]:8056".parse().unwrap()));
+    }
+
+    #[test]
+    fn non_loopback_http_bind_emits_warning() {
+        use std::net::SocketAddr;
+        for address in [
+            "0.0.0.0:8056",
+            "[::]:8056",
+            "10.1.2.3:18056",
+            "[fd00::1]:18056",
+            "[::ffff:10.1.2.3]:18056",
+        ] {
+            let addr: SocketAddr = address.parse().unwrap();
+            let warning = ServeCommand::http_bind_warning(&addr)
+                .unwrap_or_else(|| panic!("expected a warning for {addr}"));
+            assert!(warning.contains("unauthenticated"), "{warning}");
+            assert!(warning.contains(address), "{warning}");
+        }
+    }
+
+    #[test]
+    fn loopback_http_bind_does_not_warn() {
+        use std::net::SocketAddr;
+        for address in [
+            "127.0.0.1:8056",
+            "127.200.0.1:18056",
+            "[::1]:8056",
+            "[::ffff:127.0.0.1]:8056",
+        ] {
+            let addr: SocketAddr = address.parse().unwrap();
+            assert!(
+                ServeCommand::http_bind_warning(&addr).is_none(),
+                "unexpected warning for {addr}"
+            );
+        }
+    }
+
+    // The add-on ENV path is the risk path of SEC-02; cover the resolver
+    // semantics with unit tests (review EXP-R02). Variable names are unique
+    // per test so parallel tests cannot observe each other's values.
+    #[test]
+    fn env_opt_in_valid_value_resolves() {
+        let name = "GOVEE_TEST_HTTP_BIND_VALID";
+        std::env::set_var(name, "127.0.0.1:18056");
+        let resolved: anyhow::Result<Option<std::net::SocketAddr>> = crate::opt_env_var(name);
+        std::env::remove_var(name);
+        assert_eq!(resolved.unwrap(), Some("127.0.0.1:18056".parse().unwrap()));
+    }
+
+    #[test]
+    fn env_opt_in_empty_or_invalid_values_fail_closed() {
+        for (name, value) in [
+            ("GOVEE_TEST_HTTP_BIND_EMPTY", ""),
+            ("GOVEE_TEST_HTTP_BIND_INVALID", "not-an-address"),
+        ] {
+            std::env::set_var(name, value);
+            let resolved: anyhow::Result<Option<std::net::SocketAddr>> = crate::opt_env_var(name);
+            std::env::remove_var(name);
+            assert!(resolved.is_err(), "{name} must fail closed");
+        }
+    }
+
+    #[test]
+    fn env_opt_in_file_variant_reads_parses_and_fails_closed() {
+        let name = "GOVEE_TEST_HTTP_BIND_FILE_VARIANT";
+        let file_name = "GOVEE_TEST_HTTP_BIND_FILE_VARIANT_FILE";
+        // PID suffix keeps the temp path unique across concurrent runs (EXP-RB-02).
+        let path = std::env::temp_dir().join(format!(
+            "govee-test-http-bind-file-variant-{}",
+            std::process::id()
+        ));
+
+        std::fs::write(&path, "[::1]:18057\n").unwrap();
+        std::env::set_var(file_name, &path);
+        let resolved: anyhow::Result<Option<std::net::SocketAddr>> = crate::opt_env_var(name);
+        std::env::remove_var(file_name);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(resolved.unwrap(), Some("[::1]:18057".parse().unwrap()));
+
+        std::env::set_var(file_name, "not a socket addr");
+        let resolved: anyhow::Result<Option<std::net::SocketAddr>> = crate::opt_env_var(name);
+        std::env::remove_var(file_name);
+        assert!(
+            resolved.is_err(),
+            "unparsable _FILE content must fail closed"
+        );
+    }
+
+    #[test]
+    fn env_opt_in_missing_file_fails_closed() {
+        let name = "GOVEE_TEST_HTTP_BIND_FILE_MISSING";
+        let file_name = "GOVEE_TEST_HTTP_BIND_FILE_MISSING_FILE";
+        // PID suffix keeps the temp path unique across concurrent runs (EXP-RB-02).
+        let path = std::env::temp_dir().join(format!(
+            "govee-test-http-bind-file-missing-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        std::env::set_var(file_name, &path);
+        let resolved: anyhow::Result<Option<std::net::SocketAddr>> = crate::opt_env_var(name);
+        std::env::remove_var(file_name);
+        assert!(resolved.is_err(), "missing _FILE path must fail closed");
+    }
+
+    // Bind exactly on the configured address, in-tree: the runtime smoke
+    // suite proves this externally; this keeps the property next to the code
+    // (review EXP-RB Top-3).
+    #[tokio::test]
+    async fn http_server_binds_exactly_on_configured_loopback_port() {
+        use crate::service::http::run_http_server;
+        use crate::service::state::State;
+        use std::sync::Arc;
+
+        let state = Arc::new(State::new());
+        let reservation = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let addr = reservation.local_addr().unwrap();
+        drop(reservation);
+
+        let server = tokio::spawn(async move { run_http_server(state, addr).await });
+        // The listener appears on exactly the configured address (and only there).
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                if tokio::net::TcpStream::connect(("127.0.0.1", addr.port()))
+                    .await
+                    .is_ok()
+                {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .expect("http server did not become reachable");
+        // EXP-RC-07: prove "exactly" in-tree — the kernel must list the
+        // listener on 127.0.0.1 only, never on a wildcard address.
+        #[cfg(target_os = "linux")]
+        assert_eq!(
+            proc_listen_ips(addr.port()),
+            vec![addr.ip().to_string()],
+            "http server must bind exactly on the configured loopback address"
+        );
+        server.abort();
+    }
+
+    /// Linux `/proc/net/{tcp,tcp6}` IPs with a LISTEN socket on `port`,
+    /// decoded to their string form — the kernel's ground truth for
+    /// "bound exactly where?" (review EXP-RC-07).
+    #[cfg(target_os = "linux")]
+    fn proc_listen_ips(port: u16) -> Vec<String> {
+        let want_port = format!("{:04X}", port);
+        let mut ips = Vec::new();
+        for (table, v6) in [("/proc/net/tcp", false), ("/proc/net/tcp6", true)] {
+            let Ok(content) = std::fs::read_to_string(table) else {
+                continue;
+            };
+            for line in content.lines().skip(1) {
+                let fields: Vec<&str> = line.split_whitespace().collect();
+                if fields.len() < 4 || fields[3] != "0A" {
+                    continue; // not a LISTEN entry
+                }
+                let mut local = fields[1].split(':');
+                let (Some(ip_hex), Some(port_hex)) = (local.next(), local.next()) else {
+                    continue;
+                };
+                if port_hex != want_port {
+                    continue;
+                }
+                ips.push(decode_proc_ip(ip_hex, v6));
+            }
+        }
+        ips.sort();
+        ips
+    }
+
+    #[cfg(target_os = "linux")]
+    fn decode_proc_ip(hex: &str, v6: bool) -> String {
+        let bytes: Vec<u8> = (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).expect("valid hex ip"))
+            .collect();
+        if v6 {
+            // /proc/net/tcp6 prints each 32-bit word byte-swapped; ::1 ends
+            // in "01000000" (LE word = 1).
+            let mut octets = [0u8; 16];
+            for i in 0..4 {
+                let word = u32::from_le_bytes([
+                    bytes[i * 4],
+                    bytes[i * 4 + 1],
+                    bytes[i * 4 + 2],
+                    bytes[i * 4 + 3],
+                ]);
+                octets[i * 4..i * 4 + 4].copy_from_slice(&word.to_be_bytes());
+            }
+            std::net::Ipv6Addr::from(octets).to_string()
+        } else {
+            // The kernel prints the IPv4 address as a little-endian u32:
+            // 127.0.0.1 appears as "0100007F".
+            let word = u32::from_str_radix(hex, 16).expect("valid hex ip");
+            std::net::Ipv4Addr::from(word.to_le_bytes()).to_string()
+        }
     }
 }

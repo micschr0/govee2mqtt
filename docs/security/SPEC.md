@@ -1,10 +1,16 @@
 # govee2mqtt-Security-Fork – Spezifikation
 
-Stand: 2026-10-13 · Version: 1.1 · Status: FREIGEGEBEN ZUR LOKALEN ENTWICKLUNG
+Stand: 2026-10-14 · Version: 1.3 · Status: FREIGEGEBEN ZUR LOKALEN ENTWICKLUNG
 
 Diese Spezifikation ist die versionierte Quelle der Wahrheit für den Fork.
 Jede Anforderung hat eine ID, eine Begründung und eine messbare Abnahme.
 Offene Punkte sind ausdrücklich als solche markiert und werden nicht erfunden.
+
+## Verifikationsstand (14.10. 2026, Review-Runde 3)
+
+- SEC-01, SEC-02: implementiert und lokal verifiziert; reale App-/Test-HA-Abnahme OFFEN (WB-16).
+- MQTT-01, LAN-01, ROB-01: implementiert, lokal (synthetische Fixture) verifiziert; reale Geräteabnahme OFFEN (WB-08).
+- CLOUD-01: implementiert; lokal PASS + E2E am Test-HA PASS (14.10. 00:14).
 
 ## Ziel
 
@@ -80,6 +86,10 @@ MQTT-/LAN-Funktionalität für Michaels Heimnetz zu beeinträchtigen.
 
 - **Soll:** Fällt die Cloud-Erreichbarkeit aus, funktionieren LAN-Geräte
   weiterhin. Der Dienst stürzt nicht ab und crash-loopt nicht.
+- **Begründung:** Michaels Betrieb darf nicht an der Govee-Cloud hängen:
+  LAN-Geräte müssen auch bei Cloud-Ausfall oder entzogenem Zugang schaltbar
+  bleiben (Kernsicherheitsziel des Forks, Astra-Review-Kontext). Nachgereicht
+  in Revision 1.3 (EXP-SDLC-09) — einzige Anforderung ohne Begründungsfeld.
 - **Abnahme:** Internetzugang zur Govee-Cloud unterbinden, vereinbartes
   LAN-Gerät schalten. Messbar: Der Dienst läuft nach Ausfallende ohne
   Neustart weiter (Beobachtungsfenster ≥ 10 min), die MQTT-Sitzung stellt
@@ -105,7 +115,9 @@ MQTT-/LAN-Funktionalität für Michaels Heimnetz zu beeinträchtigen.
   Smoke) grün — SEC-01/SEC-02 unbeeinflusst; (c) E2E am Test-HA mit echten
   Govee-Credentials: Dienst startet ohne Crash-Loop, Log zeigt die
   Fallback-Warnung, H60C1 bleibt steuerbar. (a)+(b) LOKAL PASS,
-  (c) OFFEN bis zur Abnahme im Test-HA.
+  (c) PASS am 14.10. 2026, 00:14 MESZ im Test-HA
+  ([Evidenz](evidence/cloud01-e2e-2026-10-14.log): Fallback-Warnung, IoT
+  CONNACK 0, Devices returned; Build 0.3.0-local-338611708f77).
 - **Priorität:** MUSS für Account-Betrieb (LAN-only-Betrieb unberührt)
 - **Grenzen:** Beim Fallback liefert der Community-Login kein Account-IoT-
   Topic; Statusupdates kommen per Geräte-Polling statt Push. Szenen/
@@ -203,3 +215,5 @@ Quellen (Originalabruf 11.10.2026):
 | 0.9 | 2026-10-12 | Freigabenachträge dokumentiert: Push-Freigabe A (Fork-Branch), fork-main als lokale HA-Store-Quelle (`e72848f`/`00c946f`), SPEC/TEST-MATRIX-Snapshots unter `docs/security/` veröffentlicht |
 | 1.0 | 2026-10-13 | M6=B (Michael, 19:23): audit-sauberes Dependency-Update (`deps/2026-10-13`, 213 Pakete) wird VOR der Abnahme eingebracht — Abnahme-Basis ist ab jetzt das Lock aus `16ebe55` (cargo-audit 0 Funde); Toolchain-Pin 1.94.0 unangetastet |
 | 1.1 | 2026-10-13 | CLOUD-01 ergänzt (Michael, 23:11, „Option 2“): Übernahme von Upstream-PR #689 (454-Community-Fallback, Commit `458c2e5`); lokale Abnahme PASS, E2E im Test-HA OFFEN |
+| 1.2 | 2026-10-14 | CLOUD-01(c) E2E PASS im Test-HA (Log-Evidenz, Build 0.3.0-local-338611708f77); Anforderung damit vollständig abgenommen |
+| 1.3 | 2026-10-14 | Review-Runde 3 (Michael 01:09, „intensiver code review mit allen fixes"): ROB-01-Begründung nachgereicht (EXP-SDLC-09), Verifikationsstand-Abschnitt ergänzt; Fallback-Verhalten durch Runde-3-Fixes geschärft (Cache-Invalidierung, Token-TTL, `list`-Fallback, 454-Wortgrenze — Commit `8ec5b02`) |

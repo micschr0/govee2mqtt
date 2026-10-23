@@ -56,7 +56,9 @@ impl ListCommand {
             }
         }
         if let Ok(client) = args.undoc_args.api_client() {
-            let acct = client.login_account_cached().await?;
+            // Same fallback as serve/IoT so `govee2mqtt list` keeps working
+            // for 454-blocked accounts (EXP-RC-03).
+            let acct = client.login_account_or_community().await?;
             let info = client.get_device_list(&acct.token).await?;
             let mut group_by_id = HashMap::new();
             for group in info.groups {

@@ -1,6 +1,6 @@
 # Test-Matrix – govee2mqtt-Security-Fork
 
-Stand: 2026-10-13 · Version: 1.1 · Status: PRÜFPLAN FREIGEGEBEN; ABNAHMEN OFFEN
+Stand: 2026-10-14 · Version: 1.2 · Status: PRÜFPLAN FREIGEGEBEN; ABNAHMEN TEILWEISE ERLEDIGT (CLOUD-01 komplett)
 
 Jede Zeile verknüpft eine Anforderung mit einem Szenario, einer Prüfmethode
 und dem Nachweis. Eine Anforderung gilt erst als erfüllt, wenn Evidenz vorliegt.
@@ -19,8 +19,8 @@ und dem Nachweis. Eine Anforderung gilt erst als erfüllt, wenn Evidenz vorliegt
 | LAN-01 | LAN-Gerät schaltet ohne Internetverbindung | Test: Netz isolieren, Gerät schalten | OFFEN | – |
 | ROB-01 | Dienst läuft weiter, wenn Cloud nicht erreichbar | Test: DNS/Route zur Cloud blockieren | OFFEN | – |
 | ROB-01 | Dienst crash-loopt nicht bei wiederholtem Cloud-Ausfall | Test: Mehrfacher Ausfall simulieren | OFFEN | – |
-| CLOUD-01 | 454 vom Primär-Login → Fallback auf Community-Login; Unit-Tests JWT/454-Erkennung; lokale Suite grün | Test: `cargo test` (49 PASS inkl. 7 neuer PR-Tests), clippy `-D warnings` clean, fmt clean, Smoke 9/9 PASS am gepatchten Baum | LOKAL PASS (Commit `458c2e5`) | [patch-smoke.json](evidence/patch-smoke.json); Testlauf 13.10. 23:2x |
-| CLOUD-01 | E2E: Start mit echten Govee-Credentials trotz 2FA-Mauer im Test-HA; Log zeigt Fallback-Warnung; H60C1 steuerbar | Demonstration am Test-HA | OFFEN | – |
+| CLOUD-01 | 454 vom Primär-Login → Fallback auf Community-Login; Unit-Tests JWT/454-Erkennung; lokale Suite grün | Test: `cargo test` (49 PASS inkl. 7 neuer PR-Tests), clippy `-D warnings` clean, fmt clean, Smoke PASS. Provenanz-True-up (EXP-SDLC-02): patch-smoke.json enthält den M6=B-Rerun (11 Fälle, git_head `16ebe55`, worktree dirty); der 9/9-Stand am `458c2e5`-Baum ist nur prosaisch belegt. Frische Runde-3-Evidenz: LOCAL-19 | LOKAL PASS (Commit `458c2e5` bzw. Folgestände) | [patch-smoke.json](evidence/patch-smoke.json) + [patch-smoke-meta.json](evidence/patch-smoke-meta.json); Testläufe 13.10. 23:2x und 14.10. (Runde 3) |
+| CLOUD-01 | E2E: Start mit echten Govee-Credentials trotz 2FA-Mauer im Test-HA; Log zeigt Fallback-Warnung; H60C1 steuerbar | Demonstration am Test-HA | PASS (14.10. 00:14) | [cloud01-e2e-2026-10-14.log](evidence/cloud01-e2e-2026-10-14.log) · Build 0.3.0-local-338611708f77 (Baseline 458c2e59): Fallback-Warnung, IoT CONNACK 0, Devices returned; Steuerbarkeit Nutzerbestätigung + LAN-Log 23:25–23:43 |
 
 ## Prüfarten
 
@@ -50,9 +50,12 @@ und dem Nachweis. Eine Anforderung gilt erst als erfüllt, wenn Evidenz vorliegt
 | 0.7 | 2026-10-12 | Expertenteam-Review eingearbeitet: LOCAL-15 (Commit `eac6a3e`), Präambel/PKG-06/Abschluss true-up, PKG-03/04-F3-Hinweis |
 | 0.8 | 2026-10-12 | Autonome Fortführung (Auftrag 20:51): LOCAL-16 ergänzt (EXP-H08 Cloud-503-Phase), H06-Fixture-Dedup umgesetzt (lan-regression nutzt lan_fixture), [TEST-HOST-RUNBOOK.md](TEST-HOST-RUNBOOK.md) angelegt (WB-19), WB-13-Inventar erstellt |
 | 0.9 | 2026-10-13 | Expert-Review-Runde 2 (3 Fach-Reviewer, [research/expert-review-2026-10-13-*.md](research/expert-review-2026-10-13-sdlc.md)): Grenzsatz Push/Fork true-upet (EXP-SD-01), Versionszeile im Header (SD-02), LOCAL-14/15-Provenanz-Fußnoten (SD-04), LOCAL-17 (RB-Top-3-Fixes, Commit `7545597`) |
-| 1.0 | 2026-10-13 | Nachtrag: Kopf stand bereits auf 1.0 ( Historie lief bis 0.9 hinterher); Zeile gleicht an SPEC 1.0 an (Abnahme-Basis = Lock aus `16ebe55`, M6=B) |
-| 1.1 | 2026-10-13 | CLOUD-01 ergänzt (PR #689-Übernahme, Commit `458c2e5`): lokale Abnahme PASS, E2E am Test-HA OFFEN |
+
 | 1.0 | 2026-10-13 | M6=B umgesetzt: LOCAL-18 (Deps-Adoption `16ebe55`, Audit 0 Funde, Suite+Harness komplett PASS, neuer Store-Export `http-deps-m6b`) |
+| 1.0 (Kopf-Nachtrag, 2026-10-13) | 2026-10-13 | Kopf stand bereits auf 1.0 (Historie lief bis 0.9 hinterher); Zeile gleicht an SPEC 1.0 an (Abnahme-Basis = Lock aus `16ebe55`, M6=B) |
+| 1.1 | 2026-10-13 | CLOUD-01 ergänzt (PR #689-Übernahme, Commit `458c2e5`): lokale Abnahme PASS, E2E am Test-HA OFFEN |
+| 1.2 | 2026-10-14 | CLOUD-01(c) E2E PASS im Test-HA dokumentiert (Michael-Log 00:14; Build 0.3.0-local-338611708f77, reparierter Store-Export 9e8e587..344f60f, Baseline 458c2e59) |
+| 1.3 | 2026-10-14 | Review-Runde 3 (4 Fach-Reviewer, [research/expert-review-2026-10-14-*.md](research/)): LOCAL-19 (Code-Fixes `8ec5b02` + Harness-Provenanz/Validierung + frische Suite am `0807ddc`), CLOUD-01-Provenanz-Fußnote (EXP-SDLC-02), Footer-True-up `0807ddc`/`344f60f` (SDLC-01), Changelog-Chronologie repariert (SDLC-07), Tabellenbrüche LOCAL-17/18 geschlossen (SDLC-08) |
 
 ## Lokale Patchprüfungen – keine reale Geräte-/HA-Abnahme
 
@@ -113,11 +116,18 @@ Prüfdatum 2026-10-11. Details: [Paketierungsbericht](local-package/PACKAGING-RE
 | PKG-03 / SEC-01, SEC-02 | amd64-Ziel: Rust-/HA-OCI-Digests und Architektur prüfen; Imagebuild linux/amd64 | Manifeste PASS; Gateway-Build verworfen (F3, 12.10.); Ausführung auf dem Test-Host OFFEN (dort zusätzlich QEMU/binfmt nötig) | [Manifeste](local-package/evidence/architecture-manifests.json), [Historie](local-package/PACKAGING-REPORT.md) |
 | PKG-04 / SEC-01, SEC-02 | aarch64-Ziel: Rust-/HA-OCI-Digests und Architektur prüfen; Imagebuild linux/arm64 | Manifeste PASS; Gateway-Build verworfen (F3, 12.10.); nativer Build auf dem Test-Host OFFEN | [Manifeste](local-package/evidence/architecture-manifests.json), [Historie](local-package/PACKAGING-REPORT.md) |
 | PKG-05 / MQTT-01, LAN-01 | App-Konfiginspektion: MQTT service/schema, LAN host_network, AppArmor bleiben; Cloud-Credentials nicht Default; WebUI/Ingress nicht Standard | PASS als Inspektion; HA-/Discovery-/Geräteverhalten OFFEN | [Konfiginspektion](local-package/evidence/package-inspection.json), [Grenzen](local-package/PACKAGING-REPORT.md) |
-| PKG-06 / alle Req | Frisch exportiertes HTTP-gepatchtes Image in separat autorisiertem Test-HA installieren und SPEC-Abnahmen ausführen | OFFEN / NICHT AUSGEFÜHRT; designierter F3-Buildinput seit 13.10. 23:5x (Community-Basis): [local-package/http-ctest/](local-package/http-ctest/) (`0.3.0-local-338611708f77`, Quell-HEAD `458c2e5` = HTTP-Patch + WB-17 + Review-Fixes + audit-sauberes Lock + CLOUD-01-Community-Fallback; **inkl. `local-source/test-data/`**, 16 Fixture-Dateien, SHA256SUMS komplett konsistent — repariert den Erstlauf-Fund: Export ohne test-data kann `cargo test` nicht kompilieren, und der Vorgänger-Export `0.3.0-local-ac0fb3ac7068` (Store 13.10. 23:26) hatte zudem eine inkonsistente SHA256SUMS gegen das committete PREPARE-SCRIPT) | [Exportprüfung](evidence/http-review-package-inspection.json), [Anleitung](local-package/PACKAGING-REPORT.md) |
+| PKG-06 / alle Req | Frisch exportiertes HTTP-gepatchtes Image in separat autorisiertem Test-HA installieren und SPEC-Abnahmen ausführen | OFFEN / NICHT AUSGEFÜHRT; designierter F3-Buildinput seit 13.10. 23:5x (Community-Basis): [local-package/http-ctest/](local-package/http-ctest/) (`0.3.0-local-338611708f77`, Quell-HEAD `458c2e5` = HTTP-Patch + WB-17 + Review-Fixes + audit-sauberes Lock + CLOUD-01-Community-Fallback; **inkl. `local-source/test-data/`**, 16 Fixture-Dateien, SHA256SUMS komplett konsistent — repariert den Erstlauf-Fund: Export ohne test-data kann `cargo test` nicht kompilieren (Vorgänger `0.3.0-local-ac0fb3ac7068`, Store 13.10. 23:26, war intern konsistent, fehlte aber die Fixtures; die zwischenzeitlich vermutete SHA256SUMS-Diskrepanz war ein Artefakt des lokal uncommitteten Skript-Fixes gegen den exportierten Manifest und ist widerlegt) | [Exportprüfung](evidence/http-review-package-inspection.json), [Anleitung](local-package/PACKAGING-REPORT.md) |
+
+| LOCAL-19 / alle (Runde 3) | Expert-Review-Runde 3 (Michael 14.10. 01:09, „intensiver code review mit allen fixes"; 4 Read-only-Reviewer, [Berichte](research/expert-review-2026-10-14-rust.md) · [cicd](research/expert-review-2026-10-14-cicd.md) · [harness](research/expert-review-2026-10-14-harness.md) · [sdlc](research/expert-review-2026-10-14-sdlc.md)): Code-Fixes `8ec5b02` (EXP-RC-01 beide Community-Cache-Einträge bei 401, RC-02 Synthetic-TTL folgt Token-exp, RC-03 `list` nutzt Fallback, RC-04 totes allow entfernt, RC-05 454-Wortgrenze, RC-07 Bind-Test beweist Exaktheit via /proc); Harness: Binary-Version in allen Result-JSONs + harte Validierung gegen HEAD (EXP-TH-01), LAN-Provenanz (TH-02), .env-Guard (TH-03), /proc-Race (TH-04), Sysctl-Precheck (TH-05), wait_until-Labels (TH-06); 51 Unit-Tests, fmt, strenges Clippy; CI lokal auf wt-ci2/ci-fix `7e41ace` (Store-Integrity-Gate lokal grün, Schedules, Renovate-Scoping, Gitleaks-Verengung — Push wartet auf Freigabe); Dev-Branch-CI-Bereinigung `0807ddc` (EXP-CICD-04) | PASS: volle Runtime-Suite am HEAD `0807ddc` NEU BELEGT — repariert EXP-TH-01 (Erstprüfung von LOCAL-18 lief am Binary `4276bb0e` gegen Meta `16ebe55`): Smoke 11/11, LAN-Regression, Cloud-Zyklen inkl. 503-Phase, Discovery-Restart, alle Result-JSONs belegen `binary_version 2026.10.14-0807ddcf` = HEAD | [patch-smoke-meta.json](evidence/patch-smoke-meta.json), [patch-lan-result.json](evidence/patch-lan-result.json), [cycles-result.json](evidence/cycles-result.json), [discovery-restart.json](evidence/discovery-restart.json) |
 
 Unverändert: alle realen SPEC-Abnahmen bleiben OFFEN. Keine produktive
 HA-Installation, kein Release. Kein Push zu `origin`/Upstream (wez) und
 kein PR; Pushes ausschließlich auf den per Freigaben autorisierten Fork
-`micschr0/govee2mqtt`: Branch `security/http-opt-in` = `eac6a3e`
-(`59d3b12` F2 + `7faf2eb` F5 + `eac6a3e` Review-Fixes), fork-main als
-HA-Store-Quelle (`e72848f`/`00c946f`/`3472055`).
+`micschr0/govee2mqtt`: Branch `security/http-opt-in` = `0807ddc`
+(`59d3b12` F2 + `7faf2eb` F5 + `eac6a3e`/`7545597` Review-Fixes +
+`4276bb0` Testlints + `16ebe55` M6=B-Lock + `458c2e5` CLOUD-01 +
+`8ec5b02` Review-Runde-3-Fixes + `0807ddc` CI-Bereinigung), fork-main
+als HA-Store-Quelle `ff90674` (`0.3.0-local-030ab0450c9a`, rustls
+0.23.46 gegen RUSTSEC-2026-0346/0348/0349; Store-Re-Export + Push nach
+Freigabe Michael 15.10. 00:26, cargo-audit wieder grün). (True-up
+14.10., EXP-SDLC-01; aktualisiert 15.10.)
