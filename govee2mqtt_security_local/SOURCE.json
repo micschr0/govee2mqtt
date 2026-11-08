@@ -3,18 +3,18 @@
     "aarch64": "linux/arm64",
     "amd64": "linux/amd64"
   },
-  "baseline": "d459a41da0efd2dc73afece50b69152d07309a78",
-  "content_id": "030ab0450c9a8a5783408506878896bfd4313d22517690a4855835ae655bfc9d",
+  "baseline": "34d74ea7271fa5cab4b2505273ecb947eeac8cf3",
+  "content_id": "c852b3c28ed54e1f61b1b1bbdd467d253b1ee27cfcf486c75f493e8053c3dc04",
   "input_sha256": {
     "CHANGELOG.md": "5934d886a974fba3f4ba0c2a676957d39acc2fcd7c8a55c2590d6ea24b413a1e",
     "DOCS.md": "2600058330779d56d3edea0e5745aab3b0976af3e202fd9212469eef10895b05",
     "Dockerfile": "e2a20d2d8ec89f5e567953cb06b6b20f177104d8830ceec0b2b70c269e0e9220",
-    "PREPARE-SCRIPT.py": "f07308bc37affaa411ad396dfc7e422f86a76650e425d404c73d2d67caece304",
+    "PREPARE-SCRIPT.py": "ee4b72205061cee8dfccfb9edc59345033881dc70dd153017fd58d96b183ef5c",
     "README.md": "6884c1a6422618a1f14fc86986ea9aa914d4b94f4f74097f89af3c450097a79b",
     "build.yaml": "c552b0ed1a2163e34670d371adcff0ee2e0a0d46ca8c7b73cb026b984fb98e5e",
     "config.yaml": "5cadc53e5a09c5c46a2e2f39775229c46d3c8fc218cf3bd50fb3b5a27aaa4df6",
     "local-source/AmazonRootCA1.pem": "ad6fb002e6b34c0559fa8f93a3794ff12c4e3f119bd77290c52525123fb9ea74",
-    "local-source/Cargo.lock": "8a089c866808240e9ab80d2026d2725bd6993b6827be9ebf5981ec40eba006b7",
+    "local-source/Cargo.lock": "4b705ec72dd892a4429330478cc195453a7f2639788d33b26ae84b94b960f9ff",
     "local-source/Cargo.toml": "c2760094dd29e3c95ae6eeba1fb7a4789395d7c1fd0006de6e645fb9f45ad745",
     "local-source/assets/bootstrap.bundle.min.js": "82f64f62bb03c1bc1824b0f9c9e05f70dba33e146818e63cdf5c306c8cf3dedd",
     "local-source/assets/bootstrap.min.css": "3017df4a76db5f01c2b99b603d88b03106df13bcfe18e67b7c13c2341d3a67df",
@@ -104,5 +104,5 @@
   },
   "security_acceptance": "pending",
   "spec": "0.3",
-  "version": "0.3.0-local-030ab0450c9a"
+  "version": "0.3.0-local-c852b3c28ed5"
 }
