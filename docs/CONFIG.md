@@ -1,102 +1,66 @@
-# Configuration Options
+# Configuration
 
-## Local HTTP API (disabled by default)
+Home Assistant requires an MQTT broker. Govee credentials are optional;
+enable LAN Control in the Govee app for each device.
 
-The service starts no HTTP listener unless you explicitly configure an IP
-address and port. MQTT and LAN control do not require this API or its WebUI.
+## HTTP API and WebUI
 
-|CLI (serve)|ENV|AddOn|Purpose|
-|---|---|-----|-------|
-|`--http-bind 127.0.0.1:8056`|`GOVEE_HTTP_BIND=127.0.0.1:8056`|`http_bind: "127.0.0.1:8056"`|Enable HTTP only on the specified IP:port; unset by default|
+No HTTP listener starts by default. MQTT and LAN do not require it.
 
-CLI takes precedence over the environment; a set `--http-bind` short-circuits
-environment validation entirely, so an invalid or empty `GOVEE_HTTP_BIND` is
-not even read in that case. IPv6 uses brackets, for example
-`[::1]:8056`. Invalid or empty environment values fail at startup. The old
-`--http-port` flag is removed; specifying a port alone no longer enables a
-wildcard listener. To disable HTTP, remove the option and environment value.
-The value may also be provided from a file via `GOVEE_HTTP_BIND_FILE=/path`
-(the file content is parsed as the same IP:port and fails closed on invalid
-or unreadable content).
+| CLI (`serve`) | Environment | Add-on |
+| --- | --- | --- |
+| `--http-bind 127.0.0.1:8056` | `GOVEE_HTTP_BIND=127.0.0.1:8056` | `http_bind: "127.0.0.1:8056"` |
 
-HTTP is still unauthenticated when enabled. Loopback is recommended; use
-`0.0.0.0:8056` only to deliberately expose it on all IPv4 interfaces.
-`[::]:8056` is a dual-stack wildcard bind (all IPv6 interfaces and,
-depending on the host, IPv4 too); treat it like `0.0.0.0` and avoid it
-unless that exposure is explicitly intended. When the opt-in address is
-not a loopback address, the service logs a startup warning that the
-unauthenticated API is network-reachable.
+- Format: IP and port; for IPv6, use brackets, e.g. `[::1]:8056`.
+- CLI takes precedence over ENV; an explicit CLI value skips ENV validation.
+- Alternatively, use `GOVEE_HTTP_BIND_FILE=/path/to/file`; invalid or unreadable content fails startup.
+- Empty or invalid CLI/ENV values are errors. An empty add-on field counts as unset.
+- To disable HTTP, remove the option and environment value. `--http-port` is no longer supported.
 
-An empty add-on `http_bind` value counts as unset: nothing is exported and
-HTTP stays disabled. Empty or invalid CLI/ENV values are startup errors.
-
-For LAN-only operation, leave Govee cloud credentials unset and enable LAN
-control on the device in the Govee Home app. Cloud credentials are optional
-for additional metadata and cloud-only functions.
+The enabled API has **no authentication**. Use loopback for local access only.
+`0.0.0.0:8056` binds all IPv4 interfaces; `[::]:8056` binds all IPv6 interfaces
+and, depending on the system, IPv4 as well. Non-loopback bindings produce a
+startup warning.
 
 ## Govee Credentials
 
-While `govee2mqtt` can run without any govee credentials, it can only discover
-and control the devices for which you have already enabled LAN control.
+Account email and password enable additional metadata and IoT functions.
+A Platform API key enables further device functions and scenes, depending on
+the model. Set credentials only as needed; see [privacy](PRIVACY.md).
 
-If you need cloud-provided room names to pre-assign lights into Home Assistant
-areas, you can optionally configure your Govee username and password. This is
-not required for the default LAN-only path.
-
-For scene control, for devices that don't support the LAN API, a Govee API Key
-is required.  If you don't already have one, [you can find instructions on
-obtaining one
-here](https://developer.govee.com/reference/apply-you-govee-api-key).
-
-|CLI|ENV|AddOn|Purpose|
+|CLI|ENV|Add-on|Purpose|
 |---|---|-----|-------|
-|`--govee-email`|`GOVEE_EMAIL`|`govee_email`|The email address you registered with your govee account|
-|`--govee-password`|`GOVEE_PASSWORD`|`govee_password`|The password you registered for your govee account|
-|`--api-key`|`GOVEE_API_KEY`|`govee_api_key`|The API key you requested from Govee support|
-
-*Concerned about sharing your credentials? See [Privacy](PRIVACY.md) for
-information about how data is used and retained by `govee2mqtt`*
+|`--govee-email`|`GOVEE_EMAIL`|`govee_email`|Govee account email|
+|`--govee-password`|`GOVEE_PASSWORD`|`govee_password`|Govee account password|
+|`--api-key`|`GOVEE_API_KEY`|`govee_api_key`|Govee Platform API key|
 
 ## LAN API Control
 
-A number of Govee's devices support a local control protocol that doesn't require
-your primary internet connection to be online.  This offers the lowest latency
-for control and is the preferred way for `govee2mqtt` to interact with your
-devices.
+LAN is the preferred control method. Without cloud access, only locally
+exposed device functions are available. Network details: [LAN](LAN.md).
 
-The [Govee LAN API is described in more detail
-here](https://app-h5.govee.com/user-manual/wlan-guide), including a list of
-supported devices.
-
-*Note that you must use the Govee Home app to enable the LAN API for each
-individual device before it will be possible for `govee2mqtt` to control
-it via the LAN API.*
-
-In theory the LAN API is zero-configuration and auto-discovery, but this
-relies on your network supporting multicast-UDP, which is challenging
-on some networks, especially across wifi access points and routers.
-
-|CLI|ENV|AddOn|Purpose|
+|CLI|ENV|Add-on|Purpose|
 |---|---|-----|-------|
-|`--no-multicast`|`GOVEE_LAN_NO_MULTICAST=true`|`no_multicast`|Do not multicast discovery packets to the Govee multicast group `239.255.255.250`. It is not recommended to use this option.|
-|`--broadcast-all`|`GOVEE_LAN_BROADCAST_ALL=true`|`broadcast_all`|Enumerate all non-loopback network interfaces and send discovery packets to the broadcast address of each one, individually. This may be a good option if multicast-UDP doesn't work well on your network|
-|`--global-broadcast`|`GOVEE_LAN_BROADCAST_GLOBAL=true`|`global_broadcast`|Send discovery packets to the global broadcast address `255.255.255.255`. This may be a possible solution if multicast-UDP doesn't work well on your network.|
-|`--scan`|`GOVEE_LAN_SCAN=10.0.0.1,10.0.0.2`|`scan`|Specify a list of addresses that should be scanned by sending them discovery packets. Each element in the list can be an individual IP address (eg: the address of a specific device: be sure to assign it a static IP in your DHCP or other network setup!) or a network broadcast address like `10.0.0.255` for networks that are reachable but not directly plumbed on the machine where `govee2mqtt` is running.|
-
-[Read more about LAN API Requirements here](LAN.md)
+|`--no-multicast`|`GOVEE_LAN_NO_MULTICAST=true`|`no_multicast`|Disable multicast discovery; requires a suitable alternative|
+|`--broadcast-all`|`GOVEE_LAN_BROADCAST_ALL=true`|`broadcast_all`|Send discovery to the broadcast address of each non-loopback interface|
+|`--global-broadcast`|`GOVEE_LAN_BROADCAST_GLOBAL=true`|`global_broadcast`|Send discovery to `255.255.255.255`|
+|`--scan`|`GOVEE_LAN_SCAN=10.0.0.1,10.0.0.2`|`scan`|Probe comma-separated device IPs or network broadcast addresses; use fixed DHCP assignments|
 
 ## MQTT Configuration
 
-In order to make your devices appear in Home Assistant, you will need to have configured Home Assistant with an MQTT broker.
+Use the same broker as the Home Assistant MQTT integration.
 
-  * [follow these steps](https://www.home-assistant.io/integrations/mqtt/#configuration)
-
-You will also need to configure `govee2mqtt` to use the same broker:
-
-|CLI|ENV|AddOn|Purpose|
+|CLI|ENV|Add-on|Purpose|
 |---|---|-----|-------|
-|`--mqtt-host`|`GOVEE_MQTT_HOST`|`mqtt_host`|The host name or IP address of your mqtt broker. This should be the same broker that you have configured in Home Assistant.|
-|`--mqtt-port`|`GOVEE_MQTT_PORT`|`mqtt_port`|The port number of the mqtt broker. The default is `1883`|
-|`--mqtt-username`|`GOVEE_MQTT_USER`|`mqtt_username`|If your broker requires authentication, the username to use|
-|`--mqtt-password`|`GOVEE_MQTT_PASSWORD`|`mqtt_password`|If your broker requires authentication, the password to use|
+|`--mqtt-host`|`GOVEE_MQTT_HOST`|`mqtt_host`|Broker hostname or IP|
+|`--mqtt-port`|`GOVEE_MQTT_PORT`|`mqtt_port`|Broker port, default `1883`|
+|`--mqtt-username`|`GOVEE_MQTT_USER`|`mqtt_username`|Broker username|
+|`--mqtt-password`|`GOVEE_MQTT_PASSWORD`|`mqtt_password`|Broker password|
 
+## Operation
+
+`GOVEE_TEMPERATURE_SCALE=C` or `F` sets the temperature unit
+(add-on: `temperature_scale`). `TZ=Europe/Berlin` sets the log timezone.
+For diagnostics, use `RUST_LOG=govee=trace` (add-on: `debug_level`);
+check logs for sensitive data before sharing.
+CLI reference: `govee --help` and `govee serve --help`.

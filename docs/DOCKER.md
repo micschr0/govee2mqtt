@@ -1,69 +1,48 @@
-# Running govee2mqtt in Docker
+# Docker
 
-To deploy in docker:
+The Compose file uses a locally built fork image. An upstream image does not
+include this project's changes.
 
-1. Ensure that you have configured the MQTT integration in Home Assistant.
+## Prerequisites
 
-    * [follow these steps](https://www.home-assistant.io/integrations/mqtt/#configuration)
+Requires Docker with Buildx, Rust and `cross` for the existing cross-build.
+From the repository root, for an amd64 host:
 
-2. Set up a `.env` file.  Here's a skeleton file; you will need to populate
-   the values with things that make sense in your environment.
-   See [CONFIG.md](CONFIG.md) for more details.
+```sh
+./scripts/build-docker.sh linux/amd64 --load -t govee2mqtt:local
+```
 
-```bash
-# Optional, but strongly recommended
-GOVEE_EMAIL=user@example.com
-GOVEE_PASSWORD=secret
-# Optional, but recommended
-GOVEE_API_KEY=UUID
+For ARM64, use `linux/arm64`. The script first creates the binary at
+`docker-target/<platform>/govee`; running `docker build .` directly requires that
+prepared binary. This is a local deployment build, not a publication.
 
-GOVEE_MQTT_HOST=mqtt
+## Configuration
+
+Create a local `.env` and adjust the values:
+
+```dotenv
+GOVEE_MQTT_HOST=192.168.1.10
 GOVEE_MQTT_PORT=1883
-# Uncomment if your mqtt broker requires authentication
-#GOVEE_MQTT_USER=user
-#GOVEE_MQTT_PASSWORD=password
-
-# Specify the temperature scale to use, either C for Celsius
-# or F for Fahrenheit
+GOVEE_MQTT_USER=govee
+GOVEE_MQTT_PASSWORD=replace-me
 GOVEE_TEMPERATURE_SCALE=C
-
-# Always use colorized output
-RUST_LOG_STYLE=always
-
-# If you are asked to set the debug level, uncomment the next line
-#RUST_LOG=govee=trace
-
-# Set the timezone for timestamps in the log
-TZ=America/Phoenix
+TZ=Europe/Berlin
 ```
 
-3. Set up your `docker-compose.yml`:
+LAN devices do not require Govee credentials. Optional:
+`GOVEE_EMAIL`, `GOVEE_PASSWORD`, `GOVEE_API_KEY`.
+HTTP stays disabled without `GOVEE_HTTP_BIND`. See [configuration](CONFIG.md).
+Keep `.env` and persistent data out of Git; they contain sensitive information.
 
-```yaml
-name: govee2mqtt
-services:
-  govee2mqtt:
-    image: ghcr.io/wez/govee2mqtt:latest
-    container_name: govee2mqtt
-    restart: unless-stopped
-    env_file:
-      - .env
-    # Host networking is required
-    network_mode: host
-# By default, a Docker volume will be used to persist data. If you prefer to mount this on your host, you can do so as follows:
-#    volumes:
-#      - '/path/to/data:/data'
+## Start and logs
+
+```sh
+docker compose up -d
+docker compose logs -f govee2mqtt
 ```
 
-4. Launch it:
-
-```console
-$ docker compose up -d
-```
-
-5. If you need to review the logs:
-
-```console
-$ docker logs govee2mqtt --follow
-```
-
+Host networking enables UDP discovery on Linux. The broker must be reachable
+from the host; `localhost` refers to the host here. A Docker service name such as
+`mqtt` only works with suitable DNS resolution.
+Cache data and IoT keys live in the Docker volume at `/data`.
+Network requirements: [LAN](LAN.md).

@@ -1,16 +1,15 @@
-# Privacy Policy for Govee2MQTT
+# Data and credentials
 
-Beyond data that is unavoidably sent to Govee's cloud servers (which are hosted
-in AWS) as a necessary part of controlling your devices, **no** data about your
-device(s) or `govee2mqtt` usage leave your device or are sent to the maintainers
-of `govee2mqtt`.
+The bridge processes device information and control commands locally and through
+the configured MQTT broker. When cloud functions are enabled, credentials are
+sent to Govee for authentication and device requests go to its services.
+Cloud credentials remain optional for LAN operation.
 
-Any credentials you configure `govee2mqtt` to use are used solely to authenticate
-with Govee's cloud servers and are not used for any other purpose.
+Device lists and configuration are cached locally to reduce API calls.
+Depending on deployment, cache data and IoT keys live under `/data` or the
+add-on configuration directory `/app/config`.
 
-## Data Maintained by Govee2MQTT
-
-Information about your list of Govee devices and their configuration is cached
-on the local filesystem to avoid exhausting API limits with the Govee cloud
-service.
-
+The bridge contains no usage telemetry sent to project maintainers.
+Treat credentials, keys, cache files and logs as confidential.
+When enabled, the HTTP API exposes data and control functions without
+authentication on the configured bind address.

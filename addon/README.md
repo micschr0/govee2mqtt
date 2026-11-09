@@ -1,12 +1,10 @@
-# Govee to MQTT bridge: Home Assistant Add-On
+# govee2mqtt for Home Assistant
 
-This addon provides a bridge between [Govee](https://govee.com) lights and Home Assistant,
-via the [Home Assistant MQTT Integration](https://www.home-assistant.io/integrations/mqtt/).
-# Local development packaging
+Add-on template for the independently maintained
+[micschr0/govee2mqtt](https://github.com/micschr0/govee2mqtt) fork.
+Connects Govee devices to Home Assistant through MQTT; LAN preferred,
+cloud access optional, HTTP disabled by default.
 
-This local, unpublished variant must be exported with
-`scripts/prepare-local-addon.py` before building. See [DOCS.md](DOCS.md) for
-source provenance, both architecture commands and installation limits.
-Security acceptance is pending; the upstream instructions below are background,
-not authorization to install or start this development package.
-
+This template requires a prepared source export and cannot build on its own.
+The versioned store export is in `govee2mqtt_security_local/`.
+See [DOCS.md](DOCS.md).

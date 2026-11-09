@@ -4,7 +4,7 @@ slug: govee2mqtt_security_local
 description: Local source build; security acceptance pending
 stage: experimental
 boot: manual_only
-url: https://github.com/wez/govee2mqtt
+url: https://github.com/micschr0/govee2mqtt
 arch:
   - amd64
   - aarch64

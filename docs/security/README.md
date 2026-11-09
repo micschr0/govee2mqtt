@@ -1,19 +1,17 @@
-# Security fork specification
+# Security and acceptance
 
-This fork's security work is specified and acceptance-tested against a
-versioned specification. The authoritative working copies live in the
-development workspace; these snapshots are published for traceability.
+The fork disables HTTP by default. An explicit `http_bind` enables the API,
+which still has no authentication; see [configuration](../CONFIG.md).
+Cloud credentials are optional for LAN control.
 
-- `SPEC.md` — requirements (SEC-01/SEC-02, MQTT-01, LAN-01, ROB-01, CLOUD-01),
-  scope, baseline and authorization records. Commit messages in
-  `security/http-opt-in` reference these requirement IDs.
-- `TEST-MATRIX.md` — local verification matrix (LOCAL-0x, PKG-0x) with
-  evidence references. Real HA/device acceptance is tracked as OPEN;
-  no real acceptance is claimed as passed.
+The following documents preserve requirements and evidence from the security
+project. Dates, commits and approvals refer to their recorded state, not
+automatically to the current development tree.
 
-Internal coordination documents (DECISIONS, WORKBOARD, handover notes)
-stay in the development workspace: they contain operational and
-infrastructure context that is not part of the published repository.
+- [SPEC.md](SPEC.md): requirements, scope and baseline.
+- [TEST-MATRIX.md](TEST-MATRIX.md): test cases, results and evidence.
 
-The add-on app in `govee2mqtt_security_local/` is the local source-build
-export; see its `DOCS.md` for build/install limits.
+Real HA/MQTT/device acceptance is partly pending. Passing local tests or package
+checksums does not replace these checks.
+The versioned store package is in `govee2mqtt_security_local/`;
+[development](../DEVELOPMENT.md) explains source trees and export constraints.

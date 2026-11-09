@@ -1,10 +1,9 @@
-version: '3.8'
 services:
   govee2mqtt:
-    image: ghcr.io/wez/govee2mqtt:latest
+    image: govee2mqtt:local
     container_name: govee2mqtt
     restart: unless-stopped
     env_file:
       - .env
-    # Host networking is required
+    # Required for LAN discovery on Linux.
     network_mode: host

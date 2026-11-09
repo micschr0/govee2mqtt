@@ -1,59 +1,26 @@
-# Govee LAN API Information
+# LAN control
 
-[Govee's LAN control API](https://app-h5.govee.com/user-manual/wlan-guide) is a
-UDP based protocol with the following requirements:
+Enable LAN Control in the Govee app for each supported device.
+The bridge uses UDP:
 
-* Govee2MQTT must be able to bind to UDP port `4002` on the machine where it runs
-* Each Govee device must individually have had its LAN API access enabled
-  in its settings in the Govee Home App
-* UDP ports 4001 and 4003 must be reachable on each Govee device
+| Destination | Port | Purpose |
+| --- | --- | --- |
+| Govee device | 4001 | Discovery; multicast `239.255.255.250` by default |
+| Govee device | 4003 | Control commands |
+| Bridge | 4002 | Device replies and status |
 
-## Device Discovery
+Port 4002 must be available for a local bind. Devices reply to the bridge's
+source IP on port 4002; firewall rules and VLAN routing must allow this return path.
 
-Govee devices with LAN protocol enabled will listen for discovery packets
-UDP port 4001.  They join the multicast group `239.255.255.250` so that
-a client performing discovery, in theory, only needs to multicast to
-that same group and limit the amount of network traffic expended on
-discovery.
+## If discovery fails
 
-In practice, multicast-UDP is not well supported by various routers, especially
-on WiFI enabled networks.
+1. Check LAN Control, the device IP and firewall rules.
+2. Check Wi-Fi client isolation and multicast filtering between Wi-Fi and LAN.
+3. Try `broadcast_all` for broadcasts on each network interface.
+4. Alternatively, reserve a DHCP address and use `scan` with the device IP.
 
-Govee2MQTT provides a couple of options that can help in situations where
-multicast-UDP isn't working well in your environment, or where you have more
-unusual network topology.
+Multicast DNS is a different protocol; working mDNS does not establish working
+Govee discovery. Targeted unicast with `scan` is often more suitable across VLANs.
+The supplied Docker setup uses host networking.
 
-* You can specify a list of IP address to which discovery packets should
-  be sent directly
-* You can specify a number of variations on regular UDP broadcasts that
-  might work better than multicast in some situations
-
-For a device to be shown as usable via the LAN API in Govee2MQTT:
-
-* UDP ports `4001` and `4003` must both be reachable from the Govee2MQTT instance
-* The Govee device will respond to the source IP address of the packets sent
-  from Govee2MQTT, but UDP port `4002` will be used instead of the originating
-  port. Your network must allow this sort of "reply" to route back to Govee2MQTT.
-
-See [LAN API Control Config](CONFIG.md#lan-api-control) for more details on how
-to configure these options.
-
-## Router / Network Setup tips
-
-* Some routers have optimizations that prevent multicast-UDP from crossing from
-  the WLAN to the LAN. Check your router's manual and configuration options.
-  Don't confuse it with multicast-DNS. While that also uses UDP, it is a
-  specialization and having that working doesn't imply that multicast-UDP in
-  general will work.
-
-* Consider enabling the `broadcast_all` option for the addon, which uses
-  explicit UDP broadcasts to each network interface, rather than multicast.
-
-* Assign a static IP to the device in your DHCP setup, then add that IP to the
-  [scan list](CONFIG.md#lan-api-control) in the addon config, which will use
-  unicast UDP packets to each device.  This is heavier on your network, but
-  more compatible with certain VLAN setups.
-
-* If you have an IOT VLAN or similar, ensure that your firewall is not blocking
-  the ports mentioned above
-
+Options and syntax: [LAN configuration](CONFIG.md#lan-api-control).

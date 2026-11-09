@@ -1,23 +1,19 @@
-# Which SKUs work with Govee2MQTT?
+# Device support
 
-Support depends largely on what Govee exposes via its documented APIs.
-There are some devices for which the undocumented APIs have been
-reverse engineered.
+Support depends on capabilities exposed by Govee through LAN, the Platform API
+or undocumented cloud/IoT APIs. BLE-only devices are unsupported.
+Only LAN functions work without internet access; effects, segments and scenes
+may require additional cloud access.
 
-If the device has no WiFi, then Govee2MQTT is not able to control
-it at this time, as there is no BLE support in Govee2MQTT at this time.
+| Device family | Support |
+| --- | --- |
+| Wi-Fi lights and LED strips | LAN where LAN Control is available; additional functions through Platform API and IoT |
+| Humidifiers | Model-dependent Platform API functions; additional night-light support for H7160 |
+| Kettles | Existing support for H7171/H7173 |
+| Heaters, fans, purifiers | Existing support includes H7101, H7102, H7111, H7121, H7130, H7131, H713A, H7135 |
+| Plugs | Platform API support with model-specific limitations, such as H5082 |
 
-Only devices that support the LAN API are able to be controlled locally without
-internet access, however, the LAN API only enables a subset of the full device
-functionality. All known LAN API compatible devices are lights; there are no
-known applicance devices that support fully local control. This is not a
-limitation of Govee2MQTT, but a limitation of the hardware itself.
-
-|Family|LAN API?|Platform API?|Undocumented API?|
-|------|--------|-------------|-----------------|
-|Lights/LED Strips|The more modern/powerful WiFi controller chips can have LAN API enabled through the Govee App. When enabled, the device can have its color/temperature, brightness and on/off state controlled locally, with no external network connection required.|Most WiFi enabled controller chips can be controlled via Govee's cloud-based Platform API, and this is necessary to control features like light effect modes and scenes.|Most WiFi enabled controller chips can trigger state changes notifications via IoT for fast state updates in the HA UI|
-|Humidifiers|Not supported by these devices|Most humidifiers are controllable via the Platform API, but the level of control can be patchy; some models cannot have their night lights controlled fully at this time due to bugs on Govee's side.|Only the H7160 at this time. It allows control over the night light|
-|Kettles|Not supported by these devices|Tested with H7171 and H7173|No|
-|Heaters, Fans, Purifiers|Not supported by these devices|Tested with H7101, H7102, H7111, H7121, H7130, H7131, H713A, H7135|No|
-|Plugs|Not supported by these devices|Yes, but the API is buggy and support may be limited. ([H5082](https://github.com/wez/govee2mqtt/issues/65))|No|
-
+These entries describe existing integrations, not full acceptance testing for
+every model or firmware. Device-specific exceptions are in
+`src/service/quirks.rs`. Include the model, connection method, fork version and
+sanitized logs in bug reports.
