@@ -14,7 +14,7 @@ import tarfile
 # security/http-opt-in (SEC-01/02 + WB-17 warn-log + expert-review fixes).
 # The worktree bundles the committed history plus the uncommitted
 # lint cleanup and packaging changes.
-BASELINE = "34d74ea7271fa5cab4b2505273ecb947eeac8cf3"
+BASELINE = "9b10da79bc1f184a181b3d008f68d6996d9a807a"
 
 
 def collect_tree(root, relative, output, prefix=""):
@@ -49,7 +49,7 @@ def prepare(source, destination):
     # fine but cannot run `cargo test` (CI runs the suite against the
     # exact shipped tree, 2026-10-13 first-run finding).
     for name in ("Cargo.toml", "Cargo.lock", "build.rs", "src", "assets",
-                 "AmazonRootCA1.pem", "test-data"):
+                 "AmazonRootCA1.pem", "test-data", "vendor"):
         collect_tree(source, Path(name), files, "local-source/")
     for name in ("Dockerfile", "config.yaml", "build.yaml", "run.sh", "README.md", "DOCS.md", "CHANGELOG.md", "translations"):
         collect_tree(source / "addon", Path(name), files)

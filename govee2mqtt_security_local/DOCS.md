@@ -61,7 +61,7 @@ QEMU/binfmt emulation for the other architecture. No binfmt installation, Docker
 permission change or privileged helper is part of this task. BUILD_ARCH is
 required; unknown values fail rather than select another architecture.
 
-Rust 1.94.0 and both Debian Bookworm HA bases are digest-pinned in Dockerfile.
+Rust 1.99.1 and both Debian Bookworm HA bases are digest-pinned in Dockerfile.
 APT uses the fixed Debian snapshot 20261010T000000Z (signature verification stays
 enabled; only expired Release-time checks are disabled). Cargo.lock is honored.
 Internet access is still needed for registry layers, the Debian snapshot and

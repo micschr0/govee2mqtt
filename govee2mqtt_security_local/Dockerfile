@@ -1,13 +1,13 @@
 # Local source build only. Prepare with scripts/prepare-local-addon.py.
 # No published govee image and no precompiled host binary are inputs.
 ARG BUILD_ARCH
-FROM ghcr.io/home-assistant/amd64-base-debian:bookworm@sha256:7da3f90a8e2fdc3095cc93b0dfb751c9c21356e11b30a6493c7ac15270b4e809 AS runtime-amd64
-FROM ghcr.io/home-assistant/aarch64-base-debian:bookworm@sha256:68f4c1a11d10facc5442ff11509a164463f98b154c80dc1dfeedbc267dd71665 AS runtime-aarch64
+FROM ghcr.io/home-assistant/amd64-base-debian:bookworm@sha256:2ac5052621ce75d8af64e07a1c7fe2315c763b21fcd9bbe6843455b3a09ea001 AS runtime-amd64
+FROM ghcr.io/home-assistant/aarch64-base-debian:bookworm@sha256:d4b28f55cbd80f6547f95c288cec6106fc7642894905f71928627ee92acf16d0 AS runtime-aarch64
 
 # Runs on TARGET platform: native builder or already configured QEMU.
-FROM rust:1.94.0-bookworm@sha256:365468470075493dc4583f47387001854321c5a8583ea9604b297e67f01c5a4f AS source-builder
+FROM rust:1.99.1-bookworm@sha256:e6f2cff35d0f309acf8433b4f05878ed77092602c5065cc81801177da0bb3a9c AS source-builder
 RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
-    && printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261010T000000Z bookworm main' > /etc/apt/sources.list \
+    && printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261107T000000Z bookworm main' > /etc/apt/sources.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends cmake pkg-config \
     && rm -rf /var/lib/apt/lists/*
@@ -21,7 +21,7 @@ FROM runtime-${BUILD_ARCH}
 ARG BUILD_ARCH
 ARG BUILD_VERSION
 RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
-    && printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261010T000000Z bookworm main' > /etc/apt/sources.list \
+    && printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261107T000000Z bookworm main' > /etc/apt/sources.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates libstdc++6 libssl3 \
     && rm -rf /var/lib/apt/lists/*

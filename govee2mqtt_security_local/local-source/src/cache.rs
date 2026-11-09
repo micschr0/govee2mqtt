@@ -178,3 +178,30 @@ where
         },
     }
 }
+
+#[cfg(test)]
+mod sqlite_compatibility_tests {
+    use super::*;
+
+    #[test]
+    fn cache_round_trip_with_bundled_sqlite() {
+        let conn = sqlite_cache::rusqlite::Connection::open_in_memory().unwrap();
+        let version: String = conn
+            .query_row("select sqlite_version()", [], |row| row.get(0))
+            .unwrap();
+        let parts: Vec<u32> = version
+            .split('.')
+            .map(|part| part.parse().unwrap())
+            .collect();
+        assert!(
+            parts.as_slice() >= [3, 54, 0].as_slice(),
+            "SQLite {version} is vulnerable"
+        );
+        let cache = Cache::new(CacheConfig::default(), conn).unwrap();
+        let topic = cache.topic("compatibility").unwrap();
+        topic.set("key", b"value", Duration::from_secs(60)).unwrap();
+        assert_eq!(topic.get("key").unwrap().unwrap().data, b"value");
+        topic.delete("key").unwrap();
+        assert!(topic.get("key").unwrap().is_none());
+    }
+}

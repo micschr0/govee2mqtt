@@ -25,34 +25,45 @@ fn response_with_code<T: ToString + std::fmt::Display>(code: StatusCode, err: T)
     response
 }
 
-fn generic<T: ToString + std::fmt::Display>(err: T) -> Response {
-    response_with_code(StatusCode::INTERNAL_SERVER_ERROR, err)
+struct HttpError(Box<Response>);
+
+impl IntoResponse for HttpError {
+    fn into_response(self) -> Response {
+        *self.0
+    }
 }
 
-fn not_found<T: ToString + std::fmt::Display>(err: T) -> Response {
-    response_with_code(StatusCode::NOT_FOUND, err)
+fn generic<T: ToString + std::fmt::Display>(err: T) -> HttpError {
+    HttpError(Box::new(response_with_code(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        err,
+    )))
 }
 
-fn bad_request<T: ToString + std::fmt::Display>(err: T) -> Response {
-    response_with_code(StatusCode::BAD_REQUEST, err)
+fn not_found<T: ToString + std::fmt::Display>(err: T) -> HttpError {
+    HttpError(Box::new(response_with_code(StatusCode::NOT_FOUND, err)))
+}
+
+fn bad_request<T: ToString + std::fmt::Display>(err: T) -> HttpError {
+    HttpError(Box::new(response_with_code(StatusCode::BAD_REQUEST, err)))
 }
 
 async fn resolve_device_for_control(
     state: &StateHandle,
     id: &str,
-) -> Result<Coordinator, Response> {
+) -> Result<Coordinator, HttpError> {
     state
         .resolve_device_for_control(id)
         .await
         .map_err(not_found)
 }
 
-async fn resolve_device_read_only(state: &StateHandle, id: &str) -> Result<Device, Response> {
+async fn resolve_device_read_only(state: &StateHandle, id: &str) -> Result<Device, HttpError> {
     state.resolve_device_read_only(id).await.map_err(not_found)
 }
 
 /// Returns a json array of device information
-async fn list_devices(State(state): State<StateHandle>) -> Result<Response, Response> {
+async fn list_devices(State(state): State<StateHandle>) -> Result<Response, HttpError> {
     let mut devices = state.devices().await;
     devices.sort_by_key(|d| (d.room_name().map(|name| name.to_string()), d.name()));
 
@@ -85,7 +96,7 @@ async fn list_devices(State(state): State<StateHandle>) -> Result<Response, Resp
 async fn device_power_on(
     State(state): State<StateHandle>,
     Path(id): Path<String>,
-) -> Result<Response, Response> {
+) -> Result<Response, HttpError> {
     let device = resolve_device_for_control(&state, &id).await?;
 
     state
@@ -100,7 +111,7 @@ async fn device_power_on(
 async fn device_power_off(
     State(state): State<StateHandle>,
     Path(id): Path<String>,
-) -> Result<Response, Response> {
+) -> Result<Response, HttpError> {
     let device = resolve_device_for_control(&state, &id).await?;
 
     state
@@ -115,7 +126,7 @@ async fn device_power_off(
 async fn device_set_brightness(
     State(state): State<StateHandle>,
     Path((id, level)): Path<(String, u8)>,
-) -> Result<Response, Response> {
+) -> Result<Response, HttpError> {
     let device = resolve_device_for_control(&state, &id).await?;
 
     state
@@ -130,7 +141,7 @@ async fn device_set_brightness(
 async fn device_set_color_temperature(
     State(state): State<StateHandle>,
     Path((id, kelvin)): Path<(String, u32)>,
-) -> Result<Response, Response> {
+) -> Result<Response, HttpError> {
     let device = resolve_device_for_control(&state, &id).await?;
 
     state
@@ -145,7 +156,7 @@ async fn device_set_color_temperature(
 async fn device_set_color(
     State(state): State<StateHandle>,
     Path((id, color)): Path<(String, String)>,
-) -> Result<Response, Response> {
+) -> Result<Response, HttpError> {
     let color = csscolorparser::parse(&color)
         .map_err(|err| bad_request(format!("error parsing color '{color}': {err}")))?;
     let [r, g, b, _a] = color.to_rgba8();
@@ -164,7 +175,7 @@ async fn device_set_color(
 async fn device_set_scene(
     State(state): State<StateHandle>,
     Path((id, scene)): Path<(String, String)>,
-) -> Result<Response, Response> {
+) -> Result<Response, HttpError> {
     let device = resolve_device_for_control(&state, &id).await?;
 
     state
@@ -179,7 +190,7 @@ async fn device_set_scene(
 async fn device_list_scenes(
     State(state): State<StateHandle>,
     Path(id): Path<String>,
-) -> Result<Response, Response> {
+) -> Result<Response, HttpError> {
     let device = resolve_device_read_only(&state, &id).await?;
 
     let scenes = state.device_list_scenes(&device).await.map_err(generic)?;
@@ -187,7 +198,7 @@ async fn device_list_scenes(
     Ok(Json(scenes).into_response())
 }
 
-async fn list_one_clicks(State(state): State<StateHandle>) -> Result<Response, Response> {
+async fn list_one_clicks(State(state): State<StateHandle>) -> Result<Response, HttpError> {
     let undoc = state
         .get_undoc_client()
         .await
@@ -201,7 +212,7 @@ async fn list_one_clicks(State(state): State<StateHandle>) -> Result<Response, R
 async fn activate_one_click(
     State(state): State<StateHandle>,
     Path(name): Path<String>,
-) -> Result<Response, Response> {
+) -> Result<Response, HttpError> {
     let undoc = state
         .get_undoc_client()
         .await
@@ -250,6 +261,20 @@ fn build_router(state: StateHandle) -> Router {
         .route("/", get(redirect_to_index))
         .nest_service("/assets", ServeDir::new("assets"))
         .with_state(state)
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn error_response_preserves_status_and_json() {
+    let response = bad_request("invalid color").into_response();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!({"code": 400, "msg": "invalid color"})
+    );
 }
 
 #[cfg(test)]

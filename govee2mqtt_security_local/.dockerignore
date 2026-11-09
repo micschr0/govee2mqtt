@@ -12,6 +12,10 @@
 !local-source/src/hass_mqtt/
 !local-source/src/service/
 !local-source/test-data/
+!local-source/vendor/
+!local-source/vendor/sqlite-cache/
+!local-source/vendor/sqlite-cache/benches/
+!local-source/vendor/sqlite-cache/src/
 !translations/
 !CHANGELOG.md
 !DOCS.md
@@ -108,6 +112,13 @@
 !local-source/test-data/work-mode-issue-100.json
 !local-source/test-data/work-mode-issue-81.json
 !local-source/test-data/work-mode-issue-93.json
+!local-source/vendor/sqlite-cache/Cargo.toml
+!local-source/vendor/sqlite-cache/LICENSE
+!local-source/vendor/sqlite-cache/LOCAL-PATCH.md
+!local-source/vendor/sqlite-cache/README.md
+!local-source/vendor/sqlite-cache/benches/cache_benchmark.rs
+!local-source/vendor/sqlite-cache/src/lib.rs
+!local-source/vendor/sqlite-cache/src/lib_test.rs
 !run.sh
 !translations/en.yaml
 !.dockerignore
