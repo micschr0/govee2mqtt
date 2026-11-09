@@ -42,13 +42,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust toolchain
-        # Rust 1.94.0 ist bis zur SEC-Abnahme (WB-16/WB-08) gepinnt; danach
-        # hier auf "stable" umstellen oder weiter pinnen (siehe docs/ci-cd.md).
-        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        # Keep CI aligned with the explicitly pinned store build toolchain.
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
         with:
-          toolchain: '1.94.0'
+          toolchain: '1.99.1'
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # Cache the store source workspace, not the root baseline mirror
           # (rust-cache's default), and cache failing runs too (EXP-CICD-05).
@@ -73,7 +72,7 @@ jobs:
         run: cargo build --locked
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-llvm-cov
 

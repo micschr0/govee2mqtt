@@ -65,7 +65,7 @@
       "enabled": false
     },
     {
-      "description": "rust-toolchain-Action (dtolnay) OFF bis zur Abnahme: schützt den Rust-1.94.0-Pin in rust.yml; UMSCHALT NACH ABNAHME (WB-16/WB-08): diese Regel entfernen",
+      "description": "rust-toolchain-Action (dtolnay) OFF bis zur Abnahme: schützt den Rust-1.99.1-Pin in rust.yml; UMSCHALT NACH ABNAHME (WB-16/WB-08): diese Regel entfernen",
       "matchManagers": ["github-actions"],
       "matchPackageNames": ["dtolnay/rust-toolchain"],
       "enabled": false
