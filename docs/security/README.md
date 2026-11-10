@@ -13,5 +13,8 @@ automatically to the current development tree.
 
 Real HA/MQTT/device acceptance is partly pending. Passing local tests or package
 checksums does not replace these checks.
+Use the [manual acceptance handoff](../qa/manual-acceptance.md) for new reports:
+it separates automated protocol results, device readback, last-sent values and
+owner observations, and defines when evidence must be revalidated.
 The versioned store package is in `govee2mqtt_security_local/`;
 [development](../DEVELOPMENT.md) explains source trees and export constraints.
