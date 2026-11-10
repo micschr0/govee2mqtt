@@ -1,9 +1,0 @@
-test_invalid_observations_fail_without_exposing_values (test_addon_fixtures.FixtureComparison.test_invalid_observations_fail_without_exposing_values) ... ok
-test_live_options_can_be_compared_without_using_fake_broker_values (test_addon_fixtures.FixtureComparison.test_live_options_can_be_compared_without_using_fake_broker_values) ... ok
-test_upgrade_preserves_options_and_markers (test_addon_fixtures.FixtureComparison.test_upgrade_preserves_options_and_markers) ... ok
-
-----------------------------------------------------------------------
-Ran 3 tests in 1.040s
-
-OK
-PASS: required options and both persistent markers unchanged
