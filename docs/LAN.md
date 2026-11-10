@@ -24,3 +24,7 @@ Govee discovery. Targeted unicast with `scan` is often more suitable across VLAN
 The supplied Docker setup uses host networking.
 
 Options and syntax: [LAN configuration](CONFIG.md#lan-api-control).
+
+Model-specific research: [H60C1 local white and color zones](H60C1-LOCAL-ZONES.md)
+contains the evidence inventory and hardware protocol; physical LAN support
+remains inconclusive.
