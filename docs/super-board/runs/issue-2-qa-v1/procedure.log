@@ -1,0 +1,5 @@
+PASS: all documented shell blocks parse with bash -n
+PASS: verbatim documented Python preparation creates both contexts; scratch checksums match; verification profile and binary path match; input bytes unchanged
+PASS: repeat preparation refuses existing contexts
+PASS: existing suite rejects mutant: drop option preservation
+PASS: existing suite rejects mutant: drop marker preservation
