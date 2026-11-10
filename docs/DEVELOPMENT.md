@@ -52,3 +52,7 @@ see the [test matrix](security/TEST-MATRIX.md).
 
 Release builds, tags and publishing require explicit human approval, including
 `scripts/tag-release.sh` and release build scripts.
+
+For disposable offline fixtures, verification-profile builds on both architectures,
+and the owner-operated HA upgrade procedure, see [add-on verification](ADDON-VERIFICATION.md).
+Readiness and fixture checks do not establish migration acceptance.
