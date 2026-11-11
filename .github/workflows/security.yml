@@ -55,7 +55,7 @@ jobs:
       - name: Install shellcheck
         run: sudo apt-get install -y shellcheck
       - name: Run shellcheck
-        # addon/run.sh is excluded: it is the upstream HA add-on script with
+        # govee2mqtt_security_local/run.sh is excluded: it is the upstream HA add-on script with
         # bashio shebang (#!/usr/bin/with-contenv bashio) and SC2155/SC2164
         # findings; fixing it would churn the add-on launcher for no gain.
         run: shellcheck -S warning scripts/*.sh
@@ -73,10 +73,7 @@ jobs:
       - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-audit
-      # The top-level Cargo.lock is the untouched upstream baseline mirror
-      # (12 known RUSTSEC findings; we never churn it to avoid upstream
-      # merge conflicts). The published add-on lock inside the store
-      # mirror is the audited acceptance basis (0 findings at 16ebe55).
+      # Audit the sole application lockfile.
       - run: cargo audit
         working-directory: govee2mqtt_security_local/local-source
 

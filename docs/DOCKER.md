@@ -5,16 +5,23 @@ include this project's changes.
 
 ## Prerequisites
 
-Requires Docker with Buildx, Rust and `cross` for the existing cross-build.
-From the repository root, for an amd64 host:
+Requires Docker with Buildx and native or configured emulated execution for the
+target architecture. From the repository root:
 
 ```sh
 ./scripts/build-docker.sh linux/amd64 --load -t govee2mqtt:local
 ```
 
-For ARM64, use `linux/arm64`. The script first creates the binary at
-`docker-target/<platform>/govee`; running `docker build .` directly requires that
-prepared binary. This is a local deployment build, not a publication.
+For ARM64 use `linux/arm64`. Ordinary `docker build -t govee2mqtt:local .`
+also compiles the authoritative sources directly; no host binary or `cross`
+installation is required. Both contexts use `govee2mqtt_security_local/local-source/`
+and the locked dependencies. The default `verification` profile inherits dev,
+with debug info and incremental compilation disabled. It checks packaging, not
+release performance. Release profiles require separate explicit approval.
+
+[Verification](ADDON-VERIFICATION.md) covers both contexts and architectures,
+including a network-disabled `govee --help` smoke run. Refresh package metadata
+as described in [development](DEVELOPMENT.md) before building modified sources.
 
 ## Configuration
 

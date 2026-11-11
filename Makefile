@@ -1,31 +1,28 @@
+CARGO ?= cargo
+SOURCE_DIR := govee2mqtt_security_local/local-source
 
 check:
-	cargo check
-
-test:
-	cargo nextest run
+	cd $(SOURCE_DIR) && $(CARGO) check --locked
 
 fmt:
-	cargo +nightly fmt
+	cd $(SOURCE_DIR) && $(CARGO) fmt --all -- --check
+
+clippy:
+	cd $(SOURCE_DIR) && $(CARGO) clippy --locked --all-targets -- -D warnings
+
+test:
+	cd $(SOURCE_DIR) && $(CARGO) test --locked
+
+build:
+	cd $(SOURCE_DIR) && $(CARGO) build --locked
+
+integrity:
+	python3 scripts/check-store-source.py
+
+verify: fmt clippy test build integrity
+	python3 -m unittest discover -s tests -v
 
 docker:
-	docker build .
+	docker build --build-arg CARGO_PROFILE=verification .
 
-addon:
-	docker run \
-		--rm \
-		--privileged \
-		-v /var/run/docker.sock:/var/run/docker.sock \
-		-v ./addon:/data \
-			ghcr.io/home-assistant/amd64-builder:latest \
-			--all \
-			--test \
-			--target /data
-
-# This will start hass on http://localhost:7123
-container:
-	npm install @devcontainers/cli
-	npx @devcontainers/cli up --workspace-folder .
-	npx @devcontainers/cli exec --workspace-folder . supervisor_run
-
-.PHONY: addon fmt check hass
+.PHONY: check fmt clippy test build integrity verify docker

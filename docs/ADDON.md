@@ -18,13 +18,16 @@ the enabled API has no authentication. See [configuration](CONFIG.md).
 The package uses host networking, AppArmor and `/app/config` for persistent data.
 `boot: manual_only` prevents automatic startup at boot.
 
-## Package snapshot
+## Authoritative package
 
-`govee2mqtt_security_local/` contains a versioned export with its own source copy,
-`SOURCE.json`, `SOURCE_TAG` and `SHA256SUMS`. Changes at the repository root do
-not automatically update this package. Its metadata and documentation describe
-the exported snapshot; some links still point to upstream.
+`govee2mqtt_security_local/` is the complete store build context and contains the
+only application source tree. Supervisor builds it directly for amd64 or aarch64;
+no source download, prebuilt application image or export is required.
+`SOURCE.json`, `SOURCE_TAG` and `SHA256SUMS` record its inputs and version.
+The slug, option schema, `/data`, `/app/config` mapping and manual startup policy
+are preserved by consolidation. See [layout](SOURCE-LAYOUT.md) and
+[development](DEVELOPMENT.md) for metadata updates.
 
 Real HA/device acceptance is partly pending; see the
-[test matrix](security/TEST-MATRIX.md). Installation alone does not establish acceptance.
-See [development and export notes](DEVELOPMENT.md) before preparing a new package.
+[test matrix](security/TEST-MATRIX.md). Follow [isolated upgrade verification](ADDON-VERIFICATION.md)
+before claiming compatibility; an image build alone does not establish it.
