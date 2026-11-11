@@ -5,7 +5,7 @@
   "postStartCommand": "bash devcontainer_bootstrap",
   "runArgs": ["-e", "GIT_EDITOR=code --wait", "--privileged"],
   "containerEnv": {
-    "WORKSPACE_DIRECTORY": "${containerWorkspaceFolder}/addon"
+    "WORKSPACE_DIRECTORY": "${containerWorkspaceFolder}/govee2mqtt_security_local"
   },
   "extensions": ["timonwong.shellcheck", "esbenp.prettier-vscode"],
   "mounts": [ "type=volume,target=/var/lib/docker" ],

@@ -1,20 +1,26 @@
 name: rust
 
 on:
-  # The published product is the HA store mirror (govee2mqtt_security_local).
-  # The top-level source tree on main is the untouched upstream baseline
-  # mirror — CI on it fails under the pinned toolchain and tests code we
-  # never ship. Run rust CI only when the shipped source or this workflow
-  # changes.
+  # Development and both container contexts share these sources.
   push:
     branches: [main]
     paths:
-      - 'govee2mqtt_security_local/local-source/**'
+      - 'govee2mqtt_security_local/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'Makefile'
+      - 'scripts/**'
+      - 'tests/**'
       - '.github/workflows/rust.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'govee2mqtt_security_local/local-source/**'
+      - 'govee2mqtt_security_local/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'Makefile'
+      - 'scripts/**'
+      - 'tests/**'
       - '.github/workflows/rust.yml'
 
 concurrency:
@@ -31,7 +37,7 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        # The shipped add-on source, not the upstream baseline mirror.
+        # The sole application source tree.
         working-directory: govee2mqtt_security_local/local-source
     permissions:
       contents: read # checkout requires contents:read for actions/checkout
@@ -49,8 +55,7 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          # Cache the store source workspace, not the root baseline mirror
-          # (rust-cache's default), and cache failing runs too (EXP-CICD-05).
+          # Cache the authoritative workspace and failing runs (EXP-CICD-05).
           workspaces: govee2mqtt_security_local/local-source
           cache-on-failure: true
 

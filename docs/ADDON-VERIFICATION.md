@@ -13,12 +13,10 @@ codes in private test evidence. Keep full failure logs. Never use production or
 real user data. No release script, tag, image push or publication is needed.
 
 Set `BASELINE_PACKAGE` and `CANDIDATE_PACKAGE` to absolute paths of complete,
-reviewed add-on packages at those revisions. For today's layout, obtain each
+reviewed add-on packages at those revisions. Obtain each
 with `git archive <SHA> govee2mqtt_security_local | tar -x -C <new-directory>`;
-the package is `<new-directory>/govee2mqtt_security_local`. Do not copy root
-sources over the snapshot. For a future #1 layout, use its reviewed package
-preparation command and record it. The existing `prepare-local-addon.py` rejects
-HEADs other than its pinned baseline; do not remove that guard to make a test run.
+the package is `<new-directory>/govee2mqtt_security_local`. The candidate package contains the only application sources. No export is needed.
+Check it with `python3 scripts/check-store-source.py --store "$CANDIDATE_PACKAGE"`.
 
 Create a fresh run directory outside the checkout:
 
@@ -107,42 +105,44 @@ MQTT acceptance. Readiness success never counts as packaging or upgrade success.
 
 ## Verification-profile builds, baseline then candidate
 
-The current package Dockerfile hardcodes `--release`. Use **disposable copies**
-with a separate Cargo `verification` profile; never modify either input package.
-The following prepares both contexts, verifies their original integrity, and
-recomputes only the scratch manifest after the explicit profile changes:
+The candidate defaults to the maintained `verification` profile. It needs no
+source mutation: copy the package into a new `$RUN_DIR/candidate` directory and
+pass `--build-arg CARGO_PROFILE=verification`. Validate its metadata first.
+
+The historical baseline at `87fc74b36fe574957d17da08bada0345e4160182` hardcodes
+release. Prepare a disposable baseline context only, never change that package:
 
 ```sh
 export RUN_DIR BASELINE_PACKAGE CANDIDATE_PACKAGE
-python3 - <<'PY'
+python3 - <<'PYCODE'
 import hashlib, os, pathlib, shutil, subprocess
-for role in ('baseline', 'candidate'):
-    source = pathlib.Path(os.environ[role.upper() + '_PACKAGE'])
-    subprocess.run(['sha256sum', '--strict', '-c', 'SHA256SUMS'], cwd=source, check=True)
-    target = pathlib.Path(os.environ['RUN_DIR']) / role
-    shutil.copytree(source, target)  # Refuses an existing destination.
-    dockerfile = target / 'Dockerfile'
-    text = dockerfile.read_text()
-    assert text.count('cargo build --locked --release --bin govee') == 1
-    assert text.count('target/release/govee') == 1
-    text = text.replace('cargo build --locked --release --bin govee',
-                        'cargo build --locked --profile verification --bin govee')
-    dockerfile.write_text(text.replace('target/release/govee', 'target/verification/govee'))
-    cargo = target / 'local-source/Cargo.toml'
-    with cargo.open('a') as stream:
-        stream.write('\n[profile.verification]\ninherits = "dev"\ndebug = 0\nincremental = false\n')
-    manifest = target / 'SHA256SUMS'
-    names = [line.split('  ', 1)[1] for line in manifest.read_text().splitlines()]
-    manifest.write_text(''.join(hashlib.sha256((target / n).read_bytes()).hexdigest()
-                               + '  ' + n + '\n' for n in names))
-PY
+source = pathlib.Path(os.environ['BASELINE_PACKAGE'])
+subprocess.run(['sha256sum', '--strict', '-c', 'SHA256SUMS'], cwd=source, check=True)
+target = pathlib.Path(os.environ['RUN_DIR']) / 'baseline'
+shutil.copytree(source, target)
+dockerfile = target / 'Dockerfile'
+text = dockerfile.read_text()
+assert text.count('cargo build --locked --release --bin govee') == 1
+assert text.count('target/release/govee') == 1
+text = text.replace('cargo build --locked --release --bin govee',
+                    'cargo build --locked --profile verification --bin govee')
+dockerfile.write_text(text.replace('target/release/govee', 'target/verification/govee'))
+with (target / 'local-source/Cargo.toml').open('a') as stream:
+    stream.write('\n[profile.verification]\ninherits = "dev"\ndebug = 0\nincremental = false\n')
+manifest = target / 'SHA256SUMS'
+names = [line.split('  ', 1)[1] for line in manifest.read_text().splitlines()]
+manifest.write_text(''.join(hashlib.sha256((target / n).read_bytes()).hexdigest()
+                           + '  ' + n + '\n' for n in names))
+shutil.copytree(os.environ['CANDIDATE_PACKAGE'], pathlib.Path(os.environ['RUN_DIR']) / 'candidate')
+PYCODE
 ```
 
-Expect two new contexts; a changed Dockerfile shape or an existing verification
-profile fails rather than silently using release. Under #1, adapt this preparation
-to its reviewed layout and retain the separate profile. `SOURCE.json` still
-identifies the **original input**; scratch checksums describe the modified test
-context. Neither directory is a distributable package or release artifact; use them only for local tests.
+The baseline's SOURCE.json identifies its original input; scratch checksums
+identify the profile edits. Neither context is a release artifact. If private
+runner TLS trust requires an extra public CA, use a BuildKit secret in an owned
+scratch Dockerfile and record that transformation privately. Do not commit host
+CA files, credentials or insecure TLS switches. Native or userspace-emulated
+execution is acceptable; record the emulator identity and actual image platform.
 
 Run each role and architecture separately, saving stdout/stderr and the exit
 code for each invocation. Do not hide a build failure behind `tee` without
@@ -156,6 +156,7 @@ PLATFORM=linux/amd64
 IMAGE="govee-addon-verify:$ROLE-$ARCH"
 docker buildx build --builder "$BUILDER" --platform "$PLATFORM" --load \
   --build-arg "BUILD_ARCH=$ARCH" --build-arg BUILD_VERSION=verification \
+  --build-arg CARGO_PROFILE=verification \
   --progress plain --tag "$IMAGE" "$RUN_DIR/$ROLE"
 timeout 60 docker run --rm --platform "$PLATFORM" --network none \
   --entrypoint /app/govee "$IMAGE" --help
@@ -167,6 +168,22 @@ help text with exit 0 (no serve, no broker, no credentials). Inspect with
 `arm64`. Preserve image IDs and scratch input hashes. A passing baseline or a
 native-only run does not pass the candidate matrix. This profile checks source,
 loader, libraries and packaging; it does not measure release performance.
+
+## Ordinary Docker context
+
+The candidate also needs both architectures built from the repository root.
+Use a reviewed candidate checkout, keeping its package metadata current:
+
+```sh
+docker buildx build --builder "$BUILDER" --platform "$PLATFORM" --load \
+  --build-arg CARGO_PROFILE=verification --progress plain \
+  --tag "govee-ordinary-verify:candidate-$ARCH" .
+timeout 60 docker run --rm --platform "$PLATFORM" --network none \
+  --entrypoint /app/govee "govee-ordinary-verify:candidate-$ARCH" --help
+```
+
+Record each exit and image architecture separately. This context must compile
+from `govee2mqtt_security_local/local-source/`, not a prebuilt host binary.
 
 ## Isolated Supervisor baseline, upgrade and reset
 

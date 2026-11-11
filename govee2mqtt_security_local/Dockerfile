@@ -1,4 +1,4 @@
-# Local source build only. Prepare with scripts/prepare-local-addon.py.
+# Build the authoritative sources inside the Home Assistant context.
 # No published govee image and no precompiled host binary are inputs.
 ARG BUILD_ARCH
 FROM ghcr.io/home-assistant/amd64-base-debian:bookworm@sha256:2ac5052621ce75d8af64e07a1c7fe2315c763b21fcd9bbe6843455b3a09ea001 AS runtime-amd64
@@ -11,11 +11,14 @@ RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
     && apt-get update \
     && apt-get install -y --no-install-recommends cmake pkg-config \
     && rm -rf /var/lib/apt/lists/*
+ARG CARGO_PROFILE=verification
+ENV CARGO_BUILD_JOBS=2
 WORKDIR /context
 COPY . .
 RUN sha256sum --strict -c SHA256SUMS
 WORKDIR /context/local-source
-RUN GOVEE_CI_TAG="$(cat ../SOURCE_TAG)" cargo build --locked --release --bin govee
+RUN GOVEE_CI_TAG="$(cat ../SOURCE_TAG)" cargo build --locked --profile "$CARGO_PROFILE" --bin govee \
+    && cp "target/$CARGO_PROFILE/govee" /context/govee
 
 FROM runtime-${BUILD_ARCH}
 ARG BUILD_ARCH
@@ -26,7 +29,7 @@ RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
     && apt-get install -y --no-install-recommends ca-certificates libstdc++6 libssl3 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=source-builder /context/local-source/target/release/govee /app/govee
+COPY --from=source-builder /context/govee /app/govee
 COPY --from=source-builder /context/local-source/assets /app/assets
 COPY --from=source-builder /context/local-source/AmazonRootCA1.pem /app/AmazonRootCA1.pem
 COPY --from=source-builder /context/SOURCE.json /app/SOURCE.json

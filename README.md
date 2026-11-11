@@ -40,3 +40,7 @@ MIT; see [LICENSE.md](LICENSE.md). Originally by Wez Furlong, building on
 [Govee LAN Control](https://github.com/wez/govee-lan-hass/).
 AWS IoT support draws on work from
 [bwp91/homebridge-govee](https://github.com/bwp91/homebridge-govee/).
+
+Development, Docker and the Home Assistant store use the sole application tree
+at `govee2mqtt_security_local/local-source/`. See [source layout](docs/SOURCE-LAYOUT.md)
+and [development commands](docs/DEVELOPMENT.md).

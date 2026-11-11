@@ -17,11 +17,13 @@
 !local-source/vendor/sqlite-cache/benches/
 !local-source/vendor/sqlite-cache/src/
 !translations/
+!.dockerignore
 !CHANGELOG.md
 !DOCS.md
 !Dockerfile
-!PREPARE-SCRIPT.py
+!LICENSE.md
 !README.md
+!SHA256SUMS
 !SOURCE.json
 !SOURCE_TAG
 !build.yaml
@@ -121,5 +123,3 @@
 !local-source/vendor/sqlite-cache/src/lib_test.rs
 !run.sh
 !translations/en.yaml
-!.dockerignore
-!SHA256SUMS
