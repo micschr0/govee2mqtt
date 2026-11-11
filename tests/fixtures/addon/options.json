@@ -1,0 +1,11 @@
+{
+  "temperature_scale": "C",
+  "mqtt_host": "mqtt.invalid",
+  "mqtt_port": 1883,
+  "mqtt_username": "fixture-user",
+  "mqtt_password": "fixture-only-not-a-secret",
+  "no_multicast": true,
+  "broadcast_all": false,
+  "global_broadcast": false,
+  "debug_level": "govee=info"
+}
