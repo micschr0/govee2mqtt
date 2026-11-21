@@ -16,7 +16,7 @@ RUN GOVEE_CI_TAG="$(cat ../SOURCE_TAG)" cargo build --locked --profile "$CARGO_P
 
 RUN useradd --uid 1000 --no-create-home --shell /usr/sbin/nologin govee && mkdir /data
 
-FROM gcr.io/distroless/cc-debian12
+FROM gcr.io/distroless/cc-debian12:latest@sha256:e5d81ddde149641e2a9ba55be4545bc125c67de07508b03ba4c22e6eb0ded5aa
 
 # Import from builder.
 COPY --from=source-builder /etc/passwd /etc/passwd
@@ -45,4 +45,3 @@ CMD ["/app/govee", \
   "--govee-iot-key=/data/iot.key", \
   "--govee-iot-cert=/data/iot.cert", \
   "--amazon-root-ca=/app/AmazonRootCA1.pem"]
-

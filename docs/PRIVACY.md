@@ -17,3 +17,16 @@ The bridge contains no usage telemetry sent to project maintainers.
 Treat credentials, keys, cache files and logs as confidential.
 When enabled, the HTTP API exposes data and control functions without
 authentication on the configured bind address.
+
+The MQTT connection does not configure TLS: credentials and commands are
+visible to anyone able to observe its network traffic. Use a trusted, isolated
+network or an independently encrypted tunnel; choosing port 8883 alone does
+not enable encryption. LAN discovery is unauthenticated and can be spoofed by
+another host on the network. Limit access to trusted devices.
+
+The optional HTTP API also accepts state-changing GET requests without
+authentication or CSRF protection. Even a loopback bind can be reached by a
+browser visiting an untrusted page. Leave it disabled unless this risk is
+acceptable. Restrict access to cache directories: cached account tokens and
+IoT credentials may be present, and sharing a cache across accounts can reuse
+previous credentials.

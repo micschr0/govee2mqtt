@@ -4,7 +4,7 @@
     "amd64": "linux/amd64"
   },
   "baseline": "9b10da79bc1f184a181b3d008f68d6996d9a807a",
-  "content_id": "77c42ff0c42793aaf841dddb6588c5190887cd9a1ee17ded92a012d81abd76e5",
+  "content_id": "8cebe6cd2e6e13ae8a135d78a1b5a27256ca7e51dd12bd416ddffc80a144ca78",
   "input_sha256": {
     "CHANGELOG.md": "54a11f7fb5e2d92d696691114c0b33cb660c1b01117a1e69ddcb1fb62fe83ccb",
     "DOCS.md": "761880e1c0989d7eff8a8e47ef76b340087faff5822dd9e465faa20051aaef32",
@@ -76,7 +76,7 @@
     "local-source/src/service/device.rs": "776ed6b25270eeec080e86c35dbdb7325aabe45ddb425ad702b15bdf7a27c1ed",
     "local-source/src/service/hass.rs": "ebbca3b64735ec81d10fe5740a591b997cb56445851504647ac362bf530f0af1",
     "local-source/src/service/http.rs": "cd80962a665906c50e46168f034a9b0fb6f6280ad68080a89e59b8b0b7563084",
-    "local-source/src/service/iot.rs": "44c300667cc80032db77c6be344ecd25d83d815197d19e5a1e60d364da18c53f",
+    "local-source/src/service/iot.rs": "8254ed0ddc650c9a3ba01a10dbcf30c200b29cc14977debedb8dd2cbe4ac9dff",
     "local-source/src/service/mod.rs": "4ab8e7aa27f17d7bb1e86bb2d397036912e322d7da9de468744d41c89134040e",
     "local-source/src/service/quirks.rs": "03617619f175d98766d5dbba0be448821e770be88ac3437c61df8483d5616332",
     "local-source/src/service/state.rs": "d33107a0d5f364aeff0f2f7773d29b9a0388475228a3384ad2bd2cc26079c792",
