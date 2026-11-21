@@ -1,5 +1,5 @@
 use crate::lan_api::Client as LanClient;
-use crate::platform_api::GoveeApiClient;
+use crate::platform_api::{GoveeApiClient, HttpDeviceInfo};
 use crate::service::device::Device;
 use crate::service::hass::spawn_hass_integration;
 use crate::service::http::run_http_server;
@@ -12,6 +12,7 @@ use anyhow::Context;
 use chrono::Utc;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
@@ -109,38 +110,32 @@ async fn periodic_state_poll(state: StateHandle) -> anyhow::Result<()> {
 }
 
 async fn enumerate_devices_via_platform_api(
-    state: StateHandle,
-    client: Option<GoveeApiClient>,
+    state: &StateHandle,
+    client: &GoveeApiClient,
 ) -> anyhow::Result<()> {
-    let client = match client {
-        Some(client) => client,
-        None => match state.get_platform_client().await {
-            Some(client) => client,
-            None => return Ok(()),
-        },
-    };
-
     log::info!("Querying platform API for device list");
-    for info in client.get_devices().await? {
-        let mut device = state.device_mut(&info.sku, &info.device).await;
-        device.set_http_device_info(info);
-    }
+    update_platform_inventory(state, client, client.get_devices().await?).await;
     Ok(())
 }
 
-async fn enumerate_devices_via_undo_api(
-    state: StateHandle,
-    client: Option<GoveeUndocumentedApi>,
+async fn update_platform_inventory(
+    state: &StateHandle,
+    client: &GoveeApiClient,
+    devices: Vec<HttpDeviceInfo>,
+) {
+    for info in devices {
+        let mut device = state.device_mut(&info.sku, &info.device).await;
+        device.set_http_device_info(info);
+    }
+    state.set_platform_client(client.clone()).await;
+    state.discovery_changed.notify_one();
+}
+
+async fn enumerate_devices_via_account_api(
+    state: &StateHandle,
+    client: &GoveeUndocumentedApi,
     args: &UndocApiArguments,
 ) -> anyhow::Result<()> {
-    let (client, needs_start) = match client {
-        Some(client) => (client, true),
-        None => match state.get_undoc_client().await {
-            Some(client) => (client, false),
-            None => return Ok(()),
-        },
-    };
-
     log::info!("Querying undocumented API for device + room list");
     let acct = client.login_account_or_community().await?;
     let info = client.get_device_list(&acct.token).await?;
@@ -153,23 +148,81 @@ async fn enumerate_devices_via_undo_api(
         let room_name = group_by_id.get(&entry.group_id).map(|name| name.as_str());
         device.set_undoc_device_info(entry, room_name);
     }
+    state.set_undoc_client(client.clone()).await;
+    state.discovery_changed.notify_one();
 
-    if needs_start {
+    if let Ok(items) = client.parse_one_clicks().await {
+        *state.one_click_names.lock().await = items.into_iter().map(|item| item.name).collect();
+        state.discovery_changed.notify_one();
+    }
+    if state.get_iot_client().await.is_none() {
         start_iot_client(args, state.clone(), Some(acct)).await?;
+        state.discovery_changed.notify_one();
     }
     Ok(())
 }
 
-const ISSUE_76_EXPLANATION: &str = "Startup cannot automatically continue because entity names\n\
-    could become inconsistent especially across frequent similar\n\
-    intermittent issues if/as they occur on an ongoing basis.\n\
-    Please see https://github.com/wez/govee2mqtt/issues/76\n\
-    A workaround is to remove the Govee API credentials from your\n\
-    configuration, which will cause this govee2mqtt to use only\n\
-    the LAN API. Two consequences of that will be loss of control\n\
-    over devices that do not support the LAN API, and also devices\n\
-    changing entity ID to less descriptive names due to lack of\n\
-    metadata availability via the LAN API.";
+async fn refresh_cloud<Fut: Future<Output = anyhow::Result<()>>>(
+    service: &str,
+    retry: Duration,
+    interval: Duration,
+    mut refresh: impl FnMut() -> Fut,
+) {
+    loop {
+        let delay = match refresh().await {
+            Ok(()) => interval,
+            Err(err) => {
+                log::warn!(
+                    "{service} refresh failed; LAN and MQTT remain active; retrying in {}s",
+                    retry.as_secs()
+                );
+                if crate::undoc_api::should_log_sensitive_data() {
+                    log::debug!("{service}: {err:#}");
+                }
+                retry
+            }
+        };
+        sleep(delay).await;
+    }
+}
+
+fn spawn_cloud_discovery(state: &StateHandle, args: &crate::Args) {
+    let retry = Duration::from_secs(60);
+    let interval = Duration::from_secs(600);
+    let platform = args.api_args.api_client().ok();
+    let account = args.undoc_args.api_client().ok();
+    if platform.is_none() && account.is_none() {
+        return;
+    }
+
+    if let Some(client) = platform {
+        let state = state.clone();
+        tokio::spawn(async move {
+            refresh_cloud("Platform API", retry, interval, || {
+                enumerate_devices_via_platform_api(&state, &client)
+            })
+            .await
+        });
+    }
+    if let Some(client) = account {
+        let state = state.clone();
+        let args = args.undoc_args.clone();
+        tokio::spawn(async move {
+            refresh_cloud("Govee account", retry, interval, || {
+                enumerate_devices_via_account_api(&state, &client, &args)
+            })
+            .await
+        });
+    }
+
+    let state = state.clone();
+    tokio::spawn(async move {
+        loop {
+            sleep(retry).await;
+            state.refresh_device_scene_names().await;
+        }
+    });
+}
 
 impl ServeCommand {
     /// `Ipv6Addr::is_loopback` only recognizes `::1`. An IPv4-mapped IPv6
@@ -213,68 +266,6 @@ impl ServeCommand {
         }
         let state = Arc::new(crate::service::state::State::new());
 
-        // First, use the HTTP APIs to determine the list of devices and
-        // their names.
-
-        if let Ok(client) = args.api_args.api_client() {
-            if let Err(err) =
-                enumerate_devices_via_platform_api(state.clone(), Some(client.clone())).await
-            {
-                anyhow::bail!(
-                    "Error during initial platform API discovery: {err:#}\n{ISSUE_76_EXPLANATION}"
-                );
-            }
-
-            // only record the client after we've completed the
-            // initial platform disco attempt
-            state.set_platform_client(client).await;
-
-            // spawn periodic discovery task
-            let state = state.clone();
-            tokio::spawn(async move {
-                loop {
-                    sleep(Duration::from_secs(600)).await;
-                    if let Err(err) = enumerate_devices_via_platform_api(state.clone(), None).await
-                    {
-                        log::error!("Error during periodic platform API discovery: {err:#}");
-                    }
-                }
-            });
-        }
-        if let Ok(client) = args.undoc_args.api_client() {
-            if let Err(err) = enumerate_devices_via_undo_api(
-                state.clone(),
-                Some(client.clone()),
-                &args.undoc_args,
-            )
-            .await
-            {
-                anyhow::bail!(
-                    "Error during initial undoc API discovery: {err:#}\n{ISSUE_76_EXPLANATION}"
-                );
-            }
-
-            // only record the client after we've completed the
-            // initial undoc disco attempt
-            state.set_undoc_client(client).await;
-
-            // spawn periodic discovery task
-            let state = state.clone();
-            let args = args.undoc_args.clone();
-            tokio::spawn(async move {
-                loop {
-                    sleep(Duration::from_secs(600)).await;
-                    if let Err(err) =
-                        enumerate_devices_via_undo_api(state.clone(), None, &args).await
-                    {
-                        log::error!("Error during periodic undoc API discovery: {err:#}");
-                    }
-                }
-            });
-        }
-
-        // Now start LAN discovery
-
         let options = args.lan_disco_args.to_disco_options()?;
         if !options.is_empty() {
             log::info!("Starting LAN discovery");
@@ -286,10 +277,14 @@ impl ServeCommand {
             tokio::spawn(async move {
                 while let Some(lan_device) = scan.recv().await {
                     log::trace!("LAN disco: {lan_device:?}");
-                    state
-                        .device_mut(&lan_device.sku, &lan_device.device)
-                        .await
-                        .set_lan_device(lan_device.clone());
+                    {
+                        let mut device =
+                            state.device_mut(&lan_device.sku, &lan_device.device).await;
+                        if device.lan_device.is_none() {
+                            state.discovery_changed.notify_one();
+                        }
+                        device.set_lan_device(lan_device.clone());
+                    }
 
                     let state = state.clone();
                     let client = client.clone();
@@ -316,7 +311,7 @@ impl ServeCommand {
             sleep(Duration::from_secs(10)).await;
         }
 
-        log::info!("Devices returned from Govee's APIs");
+        log::info!("Devices discovered on LAN");
         for device in state.devices().await {
             log::info!("{device}");
             if let Some(lan) = &device.lan_device {
@@ -388,6 +383,7 @@ impl ServeCommand {
 
         // start advertising on local mqtt
         spawn_hass_integration(state.clone(), &args.hass_args).await?;
+        spawn_cloud_discovery(&state, args);
 
         match http_bind {
             Some(addr) => run_http_server(state.clone(), addr)
@@ -408,6 +404,118 @@ mod tests {
     use super::ServeCommand;
     use clap::Parser;
 
+    #[tokio::test]
+    async fn platform_inventory_recovers_without_replacing_local_identity() {
+        use super::{refresh_cloud, update_platform_inventory, Duration, GoveeApiClient};
+        use crate::service::{hass::topic_safe_id, state::State};
+        use axum::{http::StatusCode, response::IntoResponse, routing::get, Json, Router};
+        use serde_json::json;
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+
+        const ID: &str = "00:00:00:00:00:00:00:01";
+        let state = Arc::new(State::new());
+        let local_id = topic_safe_id(&crate::service::device::Device::new("H6072", ID));
+        let lamp = tokio::net::UdpSocket::bind("127.0.0.1:4003").await.unwrap();
+        state
+            .device_mut("H6072", ID)
+            .await
+            .set_lan_device(crate::lan_api::LanDevice {
+                ip: lamp.local_addr().unwrap().ip(),
+                device: ID.to_string(),
+                sku: "H6072".to_string(),
+                ble_version_hard: String::new(),
+                ble_version_soft: String::new(),
+                wifi_version_hard: String::new(),
+                wifi_version_soft: String::new(),
+            });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/devices", listener.local_addr().unwrap());
+        let hits = Arc::new(AtomicUsize::new(0));
+        let router = Router::new().route(
+            "/devices",
+            get(move || {
+                let hits = hits.clone();
+                async move {
+                    let hit = hits.fetch_add(1, Ordering::Relaxed);
+                    if hit.is_multiple_of(2) {
+                        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+                    }
+                    Json(json!({"code": 200, "message": "success", "data": [{
+                        "sku": "H6072", "device": ID, "deviceName": format!("Cloud {hit}"),
+                        "type": "devices.types.light", "capabilities": []
+                    }]}))
+                    .into_response()
+                }
+            }),
+        );
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let worker_state = state.clone();
+        let worker = tokio::spawn(async move {
+            let client = GoveeApiClient::new("synthetic");
+            refresh_cloud(
+                "Fixture",
+                Duration::from_millis(20),
+                Duration::from_millis(20),
+                || async {
+                    let result = client.fetch_devices(url.clone()).await;
+                    let result = match result {
+                        Ok(devices) => {
+                            update_platform_inventory(&worker_state, &client, devices).await;
+                            Ok(())
+                        }
+                        Err(err) => Err(err),
+                    };
+                    tx.send(
+                        result
+                            .as_ref()
+                            .map(|_| ())
+                            .map_err(|err| format!("{err:#}")),
+                    )
+                    .unwrap();
+                    result
+                },
+            )
+            .await;
+        });
+
+        tokio::time::timeout(Duration::from_secs(10), async {
+            for ready in [false, true, false, true, false, true] {
+                let event = rx.recv().await.unwrap();
+                if ready {
+                    assert!(event.is_ok(), "{event:?}");
+                } else {
+                    assert!(event.unwrap_err().contains("503"));
+                }
+                let device = state.device_by_id(ID).await.unwrap();
+                assert_eq!(topic_safe_id(&device), local_id);
+                assert_eq!(state.devices().await.len(), 1);
+                if ready {
+                    assert!(device.govee_name().unwrap().starts_with("Cloud "));
+                }
+                device
+                    .lan_device
+                    .unwrap()
+                    .send_brightness(42)
+                    .await
+                    .unwrap();
+                let mut bytes = [0; 128];
+                let size = lamp.recv(&mut bytes).await.unwrap();
+                assert_eq!(
+                    serde_json::from_slice::<serde_json::Value>(&bytes[..size]).unwrap(),
+                    json!({"msg": {"cmd": "brightness", "data": {"value": 42}}})
+                );
+            }
+        })
+        .await
+        .expect("Platform API did not retry and recover three times");
+        worker.abort();
+        server.abort();
+    }
+
     #[test]
     fn http_is_not_enabled_by_default() {
         let command = ServeCommand::try_parse_from(["serve"]).unwrap();
@@ -427,6 +535,20 @@ mod tests {
         for address in ["", "localhost:8056", "127.0.0.1", "127.0.0.1:65536"] {
             assert!(ServeCommand::try_parse_from(["serve", "--http-bind", address]).is_err());
         }
+    }
+
+    #[tokio::test]
+    async fn occupied_http_port_is_rejected_without_fallback() {
+        let reserved = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let state = std::sync::Arc::new(crate::service::state::State::new());
+        let err = crate::service::http::run_http_server(state, reserved.local_addr().unwrap())
+            .await
+            .unwrap_err();
+        assert!(err.chain().any(|cause| {
+            cause
+                .downcast_ref::<std::io::Error>()
+                .is_some_and(|err| err.kind() == std::io::ErrorKind::AddrInUse)
+        }));
     }
 
     #[test]

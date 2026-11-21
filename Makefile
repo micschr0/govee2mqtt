@@ -22,7 +22,11 @@ integrity:
 verify: fmt clippy test build integrity
 	python3 -m unittest discover -s tests -v
 
-docker:
-	docker build --build-arg CARGO_PROFILE=verification .
+runtime: build
+	python3 scripts/verify-runtime.py "$(SOURCE_DIR)/target/debug/govee"
 
-.PHONY: check fmt clippy test build integrity verify docker
+docker:
+	python3 scripts/check-store-source.py
+	docker build --build-arg CARGO_PROFILE=verification -f Dockerfile govee2mqtt_security_local
+
+.PHONY: check fmt clippy test build integrity verify runtime docker

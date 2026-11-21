@@ -1,8 +1,2 @@
 **
 !Dockerfile
-!govee2mqtt_security_local/
-!govee2mqtt_security_local/**
-**/target
-**/.env*
-**/.git
-**/__pycache__

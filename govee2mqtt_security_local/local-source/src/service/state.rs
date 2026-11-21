@@ -12,7 +12,7 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard, Semaphore};
+use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard, Notify, Semaphore};
 use tokio::time::{sleep, Duration};
 
 #[derive(Default)]
@@ -26,6 +26,8 @@ pub struct State {
     hass_client: Mutex<Option<HassClient>>,
     hass_discovery_prefix: Mutex<String>,
     temperature_scale: Mutex<TemperatureScale>,
+    pub discovery_changed: Notify,
+    pub one_click_names: Mutex<Vec<String>>,
 }
 
 pub type StateHandle = Arc<State>;
@@ -158,6 +160,11 @@ impl State {
 
     pub async fn get_iot_client(&self) -> Option<IotClient> {
         self.iot_client.lock().await.clone()
+    }
+
+    pub async fn clear_iot_client(&self) {
+        self.iot_client.lock().await.take();
+        self.discovery_changed.notify_one();
     }
 
     pub async fn set_lan_client(&self, client: LanClient) {
@@ -596,32 +603,48 @@ impl State {
         }
     }
 
-    pub async fn device_list_scenes(&self, device: &Device) -> anyhow::Result<Vec<String>> {
-        // TODO: some plumbing to maintain offline scene controls for preferred-LAN control
+    async fn cloud_scenes_enabled(&self) -> bool {
+        self.platform_client.lock().await.is_some() || self.undoc_client.lock().await.is_some()
+    }
+
+    pub async fn refresh_device_scene_names(&self) {
+        if !self.cloud_scenes_enabled().await {
+            return;
+        }
+        for device in self.devices().await {
+            if !device.is_controllable() {
+                continue;
+            }
+            if let Ok(names) = self.fetch_scene_names(&device).await {
+                let mut current = self.device_mut(&device.sku, &device.id).await;
+                if current.scene_names != names {
+                    current.scene_names = names;
+                    self.discovery_changed.notify_one();
+                }
+            }
+        }
+    }
+
+    async fn fetch_scene_names(&self, device: &Device) -> anyhow::Result<Vec<String>> {
         if let Some(client) = self.get_platform_client().await {
             if let Some(info) = &device.http_device_info {
                 return Ok(sort_and_dedup_scenes(client.list_scene_names(info).await?));
             }
         }
 
-        if let Ok(categories) = GoveeUndocumentedApi::get_scenes_for_device(&device.sku).await {
-            let mut names = vec![];
-            for cat in categories {
-                for scene in cat.scenes {
-                    for effect in scene.light_effects {
-                        if effect.scene_code != 0 {
-                            names.push(scene.scene_name);
-                            break;
-                        }
-                    }
-                }
-            }
-            return Ok(sort_and_dedup_scenes(names));
-        }
-
-        log::trace!("Platform API unavailable: Don't know how to list scenes for {device}");
-
-        Ok(vec![])
+        let categories = GoveeUndocumentedApi::get_scenes_for_device(&device.sku).await?;
+        let names = categories
+            .into_iter()
+            .flat_map(|category| category.scenes)
+            .filter(|scene| {
+                scene
+                    .light_effects
+                    .iter()
+                    .any(|effect| effect.scene_code != 0)
+            })
+            .map(|scene| scene.scene_name)
+            .collect();
+        Ok(sort_and_dedup_scenes(names))
     }
 
     pub async fn device_set_target_temperature(
@@ -648,7 +671,11 @@ impl State {
         device: &Device,
         scene: &str,
     ) -> anyhow::Result<()> {
-        // TODO: some plumbing to maintain offline scene controls for preferred-LAN control
+        anyhow::ensure!(
+            self.cloud_scenes_enabled().await,
+            "Cloud scene lookup is disabled"
+        );
+
         let avoid_platform_api = device.avoid_platform_api();
 
         if !avoid_platform_api {
@@ -697,4 +724,29 @@ pub fn sort_and_dedup_scenes(mut scenes: Vec<String>) -> Vec<String> {
     scenes.sort_by_key(|s| s.to_ascii_lowercase());
     scenes.dedup();
     scenes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn lan_only_mode_does_not_activate_cloud_scenes() {
+        let state = Arc::new(State::new());
+        let mut device = Device::new("H6072", "00:00:00:00:00:00:00:01");
+        device.set_lan_device(LanDevice {
+            ip: "127.0.0.1".parse().unwrap(),
+            device: device.id.clone(),
+            sku: device.sku.clone(),
+            ble_version_hard: String::new(),
+            ble_version_soft: String::new(),
+            wifi_version_hard: String::new(),
+            wifi_version_soft: String::new(),
+        });
+        let err = state
+            .device_set_scene(&device, "Sunrise")
+            .await
+            .unwrap_err();
+        assert_eq!(err.to_string(), "Cloud scene lookup is disabled");
+    }
 }

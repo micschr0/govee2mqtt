@@ -12,10 +12,11 @@ target architecture. From the repository root:
 ./scripts/build-docker.sh linux/amd64 --load -t govee2mqtt:local
 ```
 
-For ARM64 use `linux/arm64`. Ordinary `docker build -t govee2mqtt:local .`
-also compiles the authoritative sources directly; no host binary or `cross`
-installation is required. Both contexts use `govee2mqtt_security_local/local-source/`
-and the locked dependencies. The default `verification` profile inherits dev,
+For ARM64 use `linux/arm64`. To call Docker directly, use
+`docker build -t govee2mqtt:local -f Dockerfile govee2mqtt_security_local`.
+Both Dockerfiles use the add-on directory as their context, including its
+generated file allowlist. Do not build with the repository root as context.
+No host binary or `cross` installation is required. The default `verification` profile inherits dev,
 with debug info and incremental compilation disabled. It checks packaging, not
 release performance. Release profiles require separate explicit approval.
 
@@ -51,5 +52,8 @@ docker compose logs -f govee2mqtt
 Host networking enables UDP discovery on Linux. The broker must be reachable
 from the host; `localhost` refers to the host here. A Docker service name such as
 `mqtt` only works with suitable DNS resolution.
-Cache data and IoT keys live in the Docker volume at `/data`.
+Cache data and IoT keys live at `/data`. The bundled Compose file uses the
+image's anonymous volume, which a new container after `docker compose down`
+does not automatically reuse. Back up `/data` before removing the container.
+If switching to a named volume, migrate the existing data before recreation.
 Network requirements: [LAN](LAN.md).

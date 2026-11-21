@@ -37,6 +37,10 @@ enum SubCommand {
         data: Vec<u8>,
     },
     Scene {
+        /// Allow requests to Govee's online scene catalog
+        #[arg(long)]
+        allow_cloud: bool,
+
         /// List available scenes
         #[arg(long)]
         list: bool,
@@ -49,6 +53,16 @@ enum SubCommand {
 
 impl LanControlCommand {
     pub async fn run(&self, _args: &crate::Args) -> anyhow::Result<()> {
+        if matches!(
+            &self.cmd,
+            SubCommand::Scene {
+                allow_cloud: false,
+                ..
+            }
+        ) {
+            anyhow::bail!("Named scene lookup contacts Govee; pass --allow-cloud to opt in");
+        }
+
         let (client, _scan) = Client::new(DiscoOptions::default()).await?;
 
         let device = client.scan_ip(self.ip).await?;
@@ -72,7 +86,7 @@ impl LanControlCommand {
                     .send_color_rgb(crate::lan_api::DeviceColor { r, g, b })
                     .await?;
             }
-            SubCommand::Scene { list, scene } => {
+            SubCommand::Scene { list, scene, .. } => {
                 let mut scene_code_by_name = BTreeMap::new();
                 for category in GoveeUndocumentedApi::get_scenes_for_device(&device.sku).await? {
                     for scene in category.scenes {

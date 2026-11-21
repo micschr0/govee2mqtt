@@ -55,10 +55,7 @@ jobs:
       - name: Install shellcheck
         run: sudo apt-get install -y shellcheck
       - name: Run shellcheck
-        # govee2mqtt_security_local/run.sh is excluded: it is the upstream HA add-on script with
-        # bashio shebang (#!/usr/bin/with-contenv bashio) and SC2155/SC2164
-        # findings; fixing it would churn the add-on launcher for no gain.
-        run: shellcheck -S warning scripts/*.sh
+        run: shellcheck -S warning scripts/*.sh govee2mqtt_security_local/run.sh
 
   cargo-audit:
     name: cargo-audit

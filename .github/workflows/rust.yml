@@ -76,6 +76,10 @@ jobs:
       - name: Build
         run: cargo build --locked
 
+      - name: Fixture runtime checks
+        timeout-minutes: 5
+        run: python3 ../../scripts/verify-runtime.py target/debug/govee
+
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
@@ -87,6 +91,8 @@ jobs:
 
       - name: Coverage PR comment
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        # Reporting is informational; GitHub can reject diffs over 20,000 lines.
+        continue-on-error: true
         uses: scttnlsn/covrs@0a048b99b9b4b8aaa5d006d60caaf55c8a13c11d # v0.3.2
         with:
           coverage-files: govee2mqtt_security_local/local-source/lcov.info

@@ -161,13 +161,7 @@ impl DeviceLight {
         let effect_list = if segment.is_some() {
             vec![]
         } else {
-            match state.device_list_scenes(device).await {
-                Ok(scenes) => scenes,
-                Err(err) => {
-                    log::error!("Unable to list scenes for {device}: {err:#}");
-                    vec![]
-                }
-            }
+            device.scene_names.clone()
         };
 
         let mut supported_color_modes = vec![];
@@ -222,7 +216,7 @@ impl DeviceLight {
                 supported_color_modes,
                 brightness,
                 brightness_scale: 100,
-                effect: true,
+                effect: !effect_list.is_empty(),
                 effect_list,
                 payload_available: "online".to_string(),
                 max_mireds,

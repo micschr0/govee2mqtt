@@ -55,9 +55,8 @@ def generated_files(store):
     }
     # Exact allowlist: host credentials, targets and unrelated files never enter Docker.
     names = sorted(set(files) | set(generated) | {'.dockerignore', 'SHA256SUMS'})
-    directories = sorted({str(p) + '/' for n in names for p in Path(n).parents
-                          if str(p) != '.'})
-    generated['.dockerignore'] = ('**\n' + ''.join('!' + n + '\n' for n in directories + names)).encode()
+    # Negating a parent directory also admits its unlisted descendants.
+    generated['.dockerignore'] = ('**\n' + ''.join('!' + n + '\n' for n in names)).encode()
     generated['SHA256SUMS'] = ''.join(
         f'{digest(data)}  {name}\n' for name, data in sorted((files | generated).items())
     ).encode()

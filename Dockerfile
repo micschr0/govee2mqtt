@@ -8,7 +8,7 @@ RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
 ARG CARGO_PROFILE=verification
 ENV CARGO_BUILD_JOBS=2
 WORKDIR /context
-COPY govee2mqtt_security_local/ .
+COPY . .
 RUN sha256sum --strict -c SHA256SUMS
 WORKDIR /context/local-source
 RUN GOVEE_CI_TAG="$(cat ../SOURCE_TAG)" cargo build --locked --profile "$CARGO_PROFILE" --bin govee \
@@ -45,5 +45,4 @@ CMD ["/app/govee", \
   "--govee-iot-key=/data/iot.key", \
   "--govee-iot-cert=/data/iot.cert", \
   "--amazon-root-ca=/app/AmazonRootCA1.pem"]
-
 

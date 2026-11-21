@@ -23,6 +23,19 @@ Run CLI commands from that directory so the relative `assets/` path resolves.
 HTTP remains disabled without explicit configuration; running `--help` starts no
 services. Historical issue links and third-party attribution remain unchanged.
 
+Run `make runtime` on a disposable Linux runner; it needs free UDP ports
+4001–4003. For an already-built binary, use `python3 scripts/verify-runtime.py
+<binary>`. The suite uses a loopback-only simulated MQTT broker, LAN lamp and
+HTTPS proxy, and temporary cache data. It exercises discovery, local commands,
+HTTP binding and startup while cloud is unavailable. Rust tests cover repeated
+HTTP 503/recovery transitions. Neither substitutes for physical or Supervisor
+acceptance.
+
+For contributions, report the smallest reproducible case, then add a regression
+test at the affected layer where practical. Include the tested revision,
+commands, outcomes and limits in the PR. For real devices use the separate
+[manual acceptance handoff](qa/manual-acceptance.md).
+
 After changing package inputs, from the repository root:
 
 ```sh
@@ -38,6 +51,7 @@ is needed; Git revisions plus content hashes record provenance.
 
 [Docker](DOCKER.md) and [add-on verification](ADDON-VERIFICATION.md) use the
 non-release `verification` profile (dev, debug info off, incremental off).
-Release builds, scripts, tags and publication require explicit human approval.
+See [release and rollback](RELEASE.md); release builds, scripts, tags and
+publication require explicit human approval.
 Image and fixture checks do not replace an isolated Supervisor upgrade or device
 acceptance; see the [security matrix](security/TEST-MATRIX.md).

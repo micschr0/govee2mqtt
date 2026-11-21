@@ -103,12 +103,14 @@ impl UndocApiArguments {
     }
 
     pub fn email(&self) -> anyhow::Result<String> {
-        self.opt_email()?.ok_or_else(|| {
-            anyhow::anyhow!(
-                "Please specify the govee account email either via the \
+        self.opt_email()?
+            .filter(|email| !email.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Please specify the govee account email either via the \
                 --govee-email parameter or by setting $GOVEE_EMAIL"
-            )
-        })
+                )
+            })
     }
 
     pub fn opt_password(&self) -> anyhow::Result<Option<String>> {
@@ -119,12 +121,14 @@ impl UndocApiArguments {
     }
 
     pub fn password(&self) -> anyhow::Result<String> {
-        self.opt_password()?.ok_or_else(|| {
-            anyhow::anyhow!(
-                "Please specify the govee account password either via the \
+        self.opt_password()?
+            .filter(|password| !password.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Please specify the govee account password either via the \
                 --govee-password parameter or by setting $GOVEE_PASSWORD"
-            )
-        })
+                )
+            })
     }
 
     pub fn api_client(&self) -> anyhow::Result<GoveeUndocumentedApi> {

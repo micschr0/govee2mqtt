@@ -169,21 +169,23 @@ help text with exit 0 (no serve, no broker, no credentials). Inspect with
 native-only run does not pass the candidate matrix. This profile checks source,
 loader, libraries and packaging; it does not measure release performance.
 
-## Ordinary Docker context
+## Ordinary Docker build
 
-The candidate also needs both architectures built from the repository root.
-Use a reviewed candidate checkout, keeping its package metadata current:
+The candidate also needs both architectures built with the root Dockerfile.
+Use a reviewed checkout and the allowlisted add-on directory as the context:
 
 ```sh
 docker buildx build --builder "$BUILDER" --platform "$PLATFORM" --load \
   --build-arg CARGO_PROFILE=verification --progress plain \
-  --tag "govee-ordinary-verify:candidate-$ARCH" .
+  --tag "govee-ordinary-verify:candidate-$ARCH" -f Dockerfile govee2mqtt_security_local
 timeout 60 docker run --rm --platform "$PLATFORM" --network none \
   --entrypoint /app/govee "govee-ordinary-verify:candidate-$ARCH" --help
 ```
 
 Record each exit and image architecture separately. This context must compile
 from `govee2mqtt_security_local/local-source/`, not a prebuilt host binary.
+The Package verification workflow runs both checks on native runners; locally
+use `sh scripts/verify-packaging.sh amd64` (or `aarch64` on an eligible builder).
 
 ## Isolated Supervisor baseline, upgrade and reset
 

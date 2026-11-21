@@ -22,11 +22,20 @@ The enabled API has **no authentication**. Use loopback for local access only.
 and, depending on the system, IPv4 as well. Non-loopback bindings produce a
 startup warning.
 
-## Govee Credentials
+## Govee cloud opt-in
 
-Account email and password enable additional metadata and IoT functions.
-A Platform API key enables further device functions and scenes, depending on
-the model. Set credentials only as needed; see [privacy](PRIVACY.md).
+An API key opts into the Platform API. Account email and password together opt
+into account metadata and IoT. Leave both options unset for LAN-only control.
+Configuring either also allows online scene lookups. See [privacy](PRIVACY.md).
+
+Cloud discovery runs separately from LAN and MQTT and retries after errors.
+Cloud-only devices, names, and effects may appear later; existing discovery
+identifiers and command topics do not change. A cloud outage can still make
+cloud-only functions unavailable.
+
+The bridge does not query the online scene catalog without opt-in. To query
+it directly without credentials, run
+`govee lan-control --ip <device-ip> scene --allow-cloud --list`.
 
 |CLI|ENV|Add-on|Purpose|
 |---|---|-----|-------|

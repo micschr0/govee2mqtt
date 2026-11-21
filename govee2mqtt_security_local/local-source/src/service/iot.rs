@@ -295,9 +295,10 @@ pub async fn start_iot_client(
         .await;
 
     tokio::spawn(async move {
-        if let Err(err) = run_iot_subscriber(subscriptions, state, client, acct).await {
+        if let Err(err) = run_iot_subscriber(subscriptions, state.clone(), client, acct).await {
             log::error!("IoT loop failed: {err:#}");
         }
+        state.clear_iot_client().await;
         log::info!("IoT loop terminated");
         Ok::<(), anyhow::Error>(())
     });

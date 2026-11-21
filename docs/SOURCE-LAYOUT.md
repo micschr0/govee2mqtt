@@ -3,8 +3,9 @@
 Issue #1 retains the application in `govee2mqtt_security_local/local-source/`.
 Home Assistant builds with the add-on directory as its context, so this layout
 keeps every source input available to Supervisor without downloads, a registry
-image, or a separately maintained export. Ordinary Docker builds copy the same
-package from the repository context. Root Make targets enter that source directory.
+image, or a separately maintained export. Ordinary Docker uses the same add-on
+directory as its build context and the same generated file allowlist. Root Make
+targets enter the application source directory.
 
 ## Reconciliation at 87fc74b36fe574957d17da08bada0345e4160182
 

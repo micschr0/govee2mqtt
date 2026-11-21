@@ -107,8 +107,7 @@ pub struct SceneModeSelect {
 
 impl SceneModeSelect {
     pub async fn new(device: &ServiceDevice, state: &StateHandle) -> anyhow::Result<Option<Self>> {
-        let scenes = state.device_list_scenes(device).await?;
-        if scenes.is_empty() {
+        if device.scene_names.is_empty() {
             return Ok(None);
         }
 
@@ -131,7 +130,7 @@ impl SceneModeSelect {
                 },
                 command_topic,
                 state_topic,
-                options: scenes,
+                options: device.scene_names.clone(),
             },
             device_id: device.id.to_string(),
             state: state.clone(),

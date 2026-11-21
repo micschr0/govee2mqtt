@@ -1,0 +1,43 @@
+name: Package verification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'govee2mqtt_security_local/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'scripts/build-docker.sh'
+      - 'scripts/check-store-source.py'
+      - 'scripts/verify-packaging.sh'
+      - '.github/workflows/package-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Package / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build both container formats and check startup
+        env:
+          BUILD_ARCH: ${{ matrix.arch }}
+        run: sh scripts/verify-packaging.sh "$BUILD_ARCH"

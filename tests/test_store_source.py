@@ -64,6 +64,13 @@ class StoreIntegrityTests(unittest.TestCase):
                                 cwd=self.store, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_docker_allowlist_includes_files_not_directories(self):
+        rules = (self.store / '.dockerignore').read_text().splitlines()
+        checksummed = {line.split('  ', 1)[1]
+                       for line in (self.store / 'SHA256SUMS').read_text().splitlines()}
+        self.assertEqual(rules[0], '**')
+        self.assertEqual(set(rules[1:]), {'!' + name for name in checksummed | {'SHA256SUMS'}})
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -7,6 +7,8 @@ Cloud credentials are optional for LAN control.
 The following documents preserve requirements and evidence from the security
 project. Dates, commits and approvals refer to their recorded state, not
 automatically to the current development tree.
+They are historical originals; some linked artifacts are not included in this
+repository. Treat an unavailable artifact as missing evidence, not a current pass.
 
 - [SPEC.md](SPEC.md): requirements, scope and baseline.
 - [TEST-MATRIX.md](TEST-MATRIX.md): test cases, results and evidence.

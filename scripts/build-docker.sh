@@ -8,4 +8,5 @@ case "$TARGETPLATFORM" in
 esac
 cd "$(dirname "$0")/.."
 python3 scripts/check-store-source.py
-docker buildx build --platform "$TARGETPLATFORM" --build-arg CARGO_PROFILE=verification "$@" .
+docker buildx build --platform "$TARGETPLATFORM" --build-arg CARGO_PROFILE=verification \
+  -f Dockerfile "$@" govee2mqtt_security_local

@@ -15,7 +15,6 @@ use crate::service::device::Device as ServiceDevice;
 use crate::service::hass::{availability_topic, oneclick_topic, purge_cache_topic};
 use crate::service::state::StateHandle;
 use crate::version_info::govee_version;
-use anyhow::Context;
 
 use uuid::Uuid;
 
@@ -23,14 +22,14 @@ pub async fn enumerate_all_entites(state: &StateHandle) -> anyhow::Result<Entity
     let mut entities = EntityList::new();
 
     enumerate_global_entities(state, &mut entities).await?;
-    enumerate_scenes(state, &mut entities).await?;
+    enumerate_scenes(state, &mut entities).await;
 
     let devices = state.devices().await;
 
     for d in &devices {
-        enumerate_entities_for_device(d, state, &mut entities)
-            .await
-            .with_context(|| format!("Config::for_device({d})"))?;
+        if let Err(err) = enumerate_entities_for_device(d, state, &mut entities).await {
+            log::warn!("Could not enumerate all entities for {d}: {err:#}");
+        }
     }
 
     Ok(entities)
@@ -45,38 +44,27 @@ async fn enumerate_global_entities(
     Ok(())
 }
 
-async fn enumerate_scenes(state: &StateHandle, entities: &mut EntityList) -> anyhow::Result<()> {
-    if let Some(undoc) = state.get_undoc_client().await {
-        match undoc.parse_one_clicks().await {
-            Ok(items) => {
-                for oc in items {
-                    let unique_id = format!(
-                        "gv2mqtt-one-click-{}",
-                        Uuid::new_v5(&Uuid::NAMESPACE_DNS, oc.name.as_bytes()).simple()
-                    );
-                    entities.add(SceneConfig {
-                        base: EntityConfig {
-                            availability_topic: availability_topic(),
-                            name: Some(oc.name.to_string()),
-                            entity_category: None,
-                            origin: Origin::default(),
-                            device: Device::this_service(),
-                            unique_id: unique_id.clone(),
-                            device_class: None,
-                            icon: None,
-                        },
-                        command_topic: oneclick_topic(),
-                        payload_on: oc.name,
-                    });
-                }
-            }
-            Err(err) => {
-                log::warn!("Failed to parse one-clicks: {err:#}");
-            }
-        }
+async fn enumerate_scenes(state: &StateHandle, entities: &mut EntityList) {
+    for name in state.one_click_names.lock().await.iter() {
+        let unique_id = format!(
+            "gv2mqtt-one-click-{}",
+            Uuid::new_v5(&Uuid::NAMESPACE_DNS, name.as_bytes()).simple()
+        );
+        entities.add(SceneConfig {
+            base: EntityConfig {
+                availability_topic: availability_topic(),
+                name: Some(name.clone()),
+                entity_category: None,
+                origin: Origin::default(),
+                device: Device::this_service(),
+                unique_id,
+                device_class: None,
+                icon: None,
+            },
+            command_topic: oneclick_topic(),
+            payload_on: name.clone(),
+        });
     }
-
-    Ok(())
 }
 
 async fn entities_for_work_mode(

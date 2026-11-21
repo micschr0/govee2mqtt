@@ -109,10 +109,12 @@ impl HassArguments {
 #[derive(Clone)]
 pub struct HassClient {
     client: Client,
+    registration: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl HassClient {
     async fn register_with_hass(&self, state: &StateHandle) -> anyhow::Result<()> {
+        let _registration = self.registration.lock().await;
         let entities = enumerate_all_entites(state).await?;
 
         // Register the configs
@@ -575,6 +577,19 @@ async fn run_mqtt_loop(
 
     let mut router = rebuild_router(&client, &state).await?;
     let mut need_rebuild = false;
+    let refresh_state = state.clone();
+    let hass = refresh_state
+        .get_hass_client()
+        .await
+        .expect("have hass client");
+    tokio::spawn(async move {
+        loop {
+            refresh_state.discovery_changed.notified().await;
+            if let Err(err) = hass.register_with_hass(&refresh_state).await {
+                log::warn!("Could not refresh Home Assistant discovery: {err:#}");
+            }
+        }
+    });
 
     while let Ok(event) = subscriber.recv().await {
         match event {
@@ -595,6 +610,7 @@ async fn run_mqtt_loop(
                 log::info!("MQTT connected with status={status}");
                 if need_rebuild {
                     router = rebuild_router(&client, &state).await?;
+                    need_rebuild = false;
                 }
             }
         }
@@ -664,6 +680,7 @@ pub async fn spawn_hass_integration(
     state
         .set_hass_client(HassClient {
             client: client.clone(),
+            registration: Arc::default(),
         })
         .await;
 

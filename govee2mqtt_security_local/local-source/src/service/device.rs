@@ -42,6 +42,7 @@ pub struct Device {
     pub humidifier_param_by_mode: HashMap<u8, u8>,
 
     pub last_polled: Option<DateTime<Utc>>,
+    pub scene_names: Vec<String>,
 
     active_scene: Option<ActiveSceneInfo>,
 }

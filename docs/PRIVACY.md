@@ -5,6 +5,10 @@ the configured MQTT broker. When cloud functions are enabled, credentials are
 sent to Govee for authentication and device requests go to its services.
 Cloud credentials remain optional for LAN operation.
 
+The online scene catalog receives the device model (SKU) and does not require
+credentials itself. See [cloud opt-in](CONFIG.md#govee-cloud-opt-in) for when
+this catalog is used.
+
 Device lists and configuration are cached locally to reduce API calls.
 Depending on deployment, cache data and IoT keys live under `/data` or the
 add-on configuration directory `/app/config`.

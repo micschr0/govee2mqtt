@@ -44,12 +44,14 @@ impl GoveeApiArguments {
     }
 
     pub fn api_key(&self) -> anyhow::Result<String> {
-        self.opt_api_key()?.ok_or_else(|| {
-            anyhow::anyhow!(
-                "Please specify the api key either via the \
+        self.opt_api_key()?
+            .filter(|key| !key.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Please specify the api key either via the \
                 --api-key parameter or by setting $GOVEE_API_KEY"
-            )
-        })
+                )
+            })
     }
 
     pub fn api_client(&self) -> anyhow::Result<GoveeApiClient> {
@@ -79,12 +81,18 @@ impl GoveeApiClient {
                 allow_stale: true,
             },
             async {
-                let url = endpoint("/router/api/v1/user/devices");
-                let resp: GetDevicesResponse = self.get_request_with_json_response(url).await?;
-                Ok(CacheComputeResult::Value(resp.data))
+                Ok(CacheComputeResult::Value(
+                    self.fetch_devices(endpoint("/router/api/v1/user/devices"))
+                        .await?,
+                ))
             },
         )
         .await
+    }
+
+    pub(crate) async fn fetch_devices(&self, url: String) -> anyhow::Result<Vec<HttpDeviceInfo>> {
+        let response: GetDevicesResponse = self.get_request_with_json_response(url).await?;
+        Ok(response.data)
     }
 
     pub async fn get_device_by_id<I: AsRef<str>>(&self, id: I) -> anyhow::Result<HttpDeviceInfo> {

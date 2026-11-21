@@ -193,9 +193,7 @@ async fn device_list_scenes(
 ) -> Result<Response, HttpError> {
     let device = resolve_device_read_only(&state, &id).await?;
 
-    let scenes = state.device_list_scenes(&device).await.map_err(generic)?;
-
-    Ok(Json(scenes).into_response())
+    Ok(Json(device.scene_names).into_response())
 }
 
 async fn list_one_clicks(State(state): State<StateHandle>) -> Result<Response, HttpError> {
