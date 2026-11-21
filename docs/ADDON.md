@@ -13,6 +13,10 @@ should use [Docker](DOCKER.md).
 5. Enable LAN Control in the Govee app for each LAN device.
 6. After manually starting the add-on, check its logs and devices in the MQTT integration.
 
+The repository URL follows its default branch, not an open pull request. To
+test an unreleased commit without changing an existing installation, use the
+[isolated Supervisor procedure](ADDON-VERIFICATION.md#isolated-supervisor-baseline-upgrade-and-reset).
+
 HTTP and WebUI are disabled by default. Set `http_bind` only when needed;
 the enabled API has no authentication. See [configuration](CONFIG.md).
 The package uses host networking, AppArmor and `/app/config` for persistent data.

@@ -195,12 +195,19 @@ Keep address, host paths, tokens and broker credentials in private configuration
 If an API tool is used, its credential key is `SUPERVISOR_TOKEN`; never log it.
 A plain Docker `--help` run cannot validate Bashio or Supervisor upgrade behavior.
 
+The store URL without a branch suffix follows the default branch. Home Assistant
+supports `https://github.com/micschr0/govee2mqtt#<branch>` for a store import
+test, but it follows the branch as it changes. Use the local application store
+and the archived package for an exact revision. A local, default-branch, or
+branch-suffixed repository creates a different full app ID; use the same one
+throughout an upgrade.
+
 1. The owner records the disposable target's HA OS/Supervisor and CLI versions,
    architecture and reset snapshot. Confirm no production devices or user data.
    Use `ha apps --help` (older CLI: `ha addons --help`) and `ha store --help`
    to check installed syntax.
 2. Copy the **baseline verification context** from `$RUN_DIR/baseline`
-   into the target's local apps directory as `govee2mqtt_security_local`. Reload
+   into `/local_apps/govee2mqtt_security_local` on the test target. Reload
    the store (`ha store reload`). Expect config slug `govee2mqtt_security_local`
    and installed local slug `local_govee2mqtt_security_local`. A remote repository
    prefix differs; do not switch repositories midway through this test.
@@ -220,11 +227,15 @@ A plain Docker `--help` run cannot validate Bashio or Supervisor upgrade behavio
 6. Start (`ha apps start local_govee2mqtt_security_local`), inspect logs privately,
    expect successful isolated MQTT connection, then stop (`ha apps stop ...`,
    replacing `...` with the full slug). Confirm options and both markers remain.
-7. Replace only the local **package files** with `$RUN_DIR/candidate`,
-   keeping slug and persistent mounts. Both are disposable verification builds. Reload the store. Use the UI Update action
-   when a new version is offered; otherwise use
-   `ha apps rebuild --force local_govee2mqtt_security_local` for a local rebuild.
-   Expect candidate version/source identity; never uninstall between versions.
+7. In `$RUN_DIR/candidate` only, set a new app version in `config.yaml` if
+   the baseline and candidate have the same version. Regenerate and verify the
+   metadata with `python3 scripts/check-store-source.py --store "$RUN_DIR/candidate" --write`
+   and the same command without `--write`. Record the test version, source SHA
+   and updated checksums. Replace only the local **package files**, preserving
+   the full app ID and both persistent mounts. Reload the store and use **Update**.
+   Expect the candidate version and source identity; never uninstall between
+   versions. If no update is offered, a rebuild can test startup but does not
+   pass the upgrade check.
 8. Start the candidate and read back options and both marker files to private
    `after/` with the same structure as `before/`. Run the comparison CLI against
    the saved baseline with
