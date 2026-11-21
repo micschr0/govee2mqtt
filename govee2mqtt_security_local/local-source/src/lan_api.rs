@@ -1,6 +1,5 @@
 use crate::ble::{Base64HexBytes, SetSceneCode};
 use crate::opt_env_var;
-use crate::platform_api::from_json;
 use crate::undoc_api::GoveeUndocumentedApi;
 use anyhow::Context;
 use if_addrs::IfAddr;
@@ -25,6 +24,7 @@ const LISTEN_PORT: u16 = 4002;
 const CMD_PORT: u16 = 4003;
 /// The multicast group of which govee LAN-API enabled devices are members
 const MULTICAST: IpAddr = IpAddr::V4(Ipv4Addr::new(239, 255, 255, 250));
+const MAX_RESPONSE_BYTES: usize = 4096;
 
 #[derive(clap::Parser, Debug)]
 pub struct LanDiscoArguments {
@@ -198,9 +198,20 @@ fn unspec_ip() -> IpAddr {
     Ipv4Addr::UNSPECIFIED.into()
 }
 
+fn deserialize_scan_ip<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<IpAddr, D::Error> {
+    let value = String::deserialize(deserializer)?;
+    if value.is_empty() {
+        Ok(unspec_ip())
+    } else {
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct LanDevice {
-    #[serde(default = "unspec_ip")]
+    #[serde(default = "unspec_ip", deserialize_with = "deserialize_scan_ip")]
     pub ip: IpAddr,
     pub device: String,
     pub sku: String,
@@ -450,6 +461,63 @@ async fn send_scan(options: &DiscoOptions) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn process_packet(
+    addr: SocketAddr,
+    data: &[u8],
+    inner: &ClientInner,
+    tx: &Sender<LanDevice>,
+) -> anyhow::Result<()> {
+    let source = addr.ip();
+    anyhow::ensure!(
+        data.len() <= MAX_RESPONSE_BYTES,
+        "oversized LAN response from {addr}"
+    );
+    log::trace!("process_packet: addr={addr:?} bytes={}", data.len());
+
+    let mut response: ResponseWrapper = serde_json::from_slice(data)
+        .map_err(|_| anyhow::anyhow!("invalid LAN response from {addr}"))?;
+
+    if let Response::Scan(dev) = &mut response.msg {
+        anyhow::ensure!(
+            !source.is_unspecified()
+                && !source.is_multicast()
+                && source != IpAddr::V4(Ipv4Addr::BROADCAST),
+            "invalid scan sender {addr}"
+        );
+        // Some devices omit the IP: https://github.com/wez/govee2mqtt/issues/437
+        anyhow::ensure!(
+            dev.ip.is_unspecified() || dev.ip == source,
+            "scan response IP does not match sender {addr}"
+        );
+        // Computed names slice the last four bytes; MQTT uses the ID as one topic level.
+        let id = dev.device.replace(':', "");
+        anyhow::ensure!(
+            !id.trim().is_empty()
+                && id.is_char_boundary(id.len().saturating_sub(4))
+                && !id.contains(['/', '+', '#'])
+                && !id.chars().any(char::is_control)
+                && !dev.sku.trim().is_empty()
+                && !dev.sku.chars().any(char::is_control),
+            "invalid scan device ID or SKU from {addr}"
+        );
+        dev.ip = source;
+    }
+
+    let mut mux = inner.mux.lock().await;
+    mux.retain(|l| !l.tx.is_closed());
+    for l in mux.iter() {
+        if l.addr == source {
+            l.tx.send(response.msg.clone()).await.ok();
+        }
+    }
+
+    if let Response::Scan(info) = response.msg {
+        tx.send(info).await?;
+    }
+
+    Ok(())
+}
+
 async fn lan_disco(
     options: DiscoOptions,
     inner: Arc<ClientInner>,
@@ -465,51 +533,6 @@ async fn lan_disco(
     )?;
     let (tx, rx) = channel(8);
 
-    async fn process_packet(
-        addr: SocketAddr,
-        data: &[u8],
-        inner: &Arc<ClientInner>,
-        tx: &Sender<LanDevice>,
-    ) -> anyhow::Result<()> {
-        log::trace!(
-            "process_packet: addr={addr:?} data={}",
-            String::from_utf8_lossy(data)
-        );
-
-        let mut response: ResponseWrapper = from_json(data)
-            .with_context(|| format!("Parsing: {}", String::from_utf8_lossy(data)))?;
-
-        // This is frustrating; some newer devices don't emit the ip field
-        // as defined in the spec.  What we do to deal with this is default
-        // the ip to the v4 unspecified address during deserialization and
-        // check for it here. We'll assume that the ip to use is the ip
-        // from which we got the scan response.
-        // <https://github.com/wez/govee2mqtt/issues/437>
-        if let Response::Scan(dev) = &mut response.msg {
-            if dev.ip.is_unspecified() {
-                dev.ip = addr.ip();
-            } else if dev.ip != addr.ip() {
-                log::warn!(
-                    "Got scan packet from {addr:?} which has ip set to a different device {dev:?}"
-                );
-            }
-        }
-
-        let mut mux = inner.mux.lock().await;
-        mux.retain(|l| !l.tx.is_closed());
-        for l in mux.iter() {
-            if l.addr == addr.ip() {
-                l.tx.send(response.msg.clone()).await.ok();
-            }
-        }
-
-        if let Response::Scan(info) = response.msg {
-            tx.send(info).await?;
-        }
-
-        Ok(())
-    }
-
     async fn run_disco(
         options: &DiscoOptions,
         listen: UdpSocket,
@@ -522,12 +545,12 @@ async fn lan_disco(
         let max_retry = Duration::from_secs(60);
         let mut last_send = Instant::now();
         loop {
-            let mut buf = [0u8; 4096];
+            let mut buf = [0u8; MAX_RESPONSE_BYTES + 1];
 
             let deadline = last_send + retry_interval;
             match tokio::time::timeout_at(deadline, listen.recv_from(&mut buf)).await {
                 Ok(Ok((len, addr))) => {
-                    if let Err(err) = process_packet(addr, &buf[0..len], &inner, &tx).await {
+                    if let Err(err) = process_packet(addr, &buf[..len], &inner, &tx).await {
                         log::error!("process_packet: {err:#}");
                     }
                 }
@@ -613,5 +636,85 @@ impl Client {
         }
 
         anyhow::bail!("timed out waiting for status");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn scan_reply(device: &str, sku: &str, ip: Option<&str>) -> Vec<u8> {
+        let mut data = json!({
+            "device": device,
+            "sku": sku,
+            "bleVersionHard": "1.00.00",
+            "bleVersionSoft": "1.00.01",
+            "wifiVersionHard": "1.00.00",
+            "wifiVersionSoft": "1.00.02",
+        });
+        if let Some(ip) = ip {
+            data["ip"] = json!(ip);
+        }
+        json!({"msg": {"cmd": "scan", "data": data}})
+            .to_string()
+            .into_bytes()
+    }
+
+    #[tokio::test]
+    async fn scan_reply_validates_input_before_dispatch() {
+        let inner = ClientInner::default();
+        let (tx, mut discovery) = channel(8);
+        let from = "192.0.2.10:4001".parse::<SocketAddr>().unwrap();
+        let (listener, mut direct) = channel(8);
+        inner.mux.lock().await.push(ClientListener {
+            addr: from.ip(),
+            tx: listener,
+        });
+
+        let id = "123456789abcdef0";
+        let mut oversized = scan_reply(id, "H6072", None);
+        oversized.resize(MAX_RESPONSE_BYTES + 1, b' ');
+        for data in [
+            b"{".to_vec(),
+            scan_reply(id, "H6072", Some("invalid IP")),
+            scan_reply(id, "H6072", Some("192.0.2.11")),
+            scan_reply("::", "H6072", None),
+            scan_reply("éabc", "H6072", None), // Computed name would split a code point.
+            scan_reply("nested/id", "H6072", None),
+            scan_reply(id, "", None),
+            scan_reply(id, "H6072\n", None),
+            oversized,
+        ] {
+            assert!(process_packet(from, &data, &inner, &tx).await.is_err());
+            assert!(discovery.try_recv().is_err());
+            assert!(direct.try_recv().is_err());
+        }
+
+        for ip in [None, Some(""), Some("0.0.0.0"), Some("::")] {
+            let data = scan_reply(id, "H6072", ip);
+            process_packet(from, &data, &inner, &tx).await.unwrap();
+            let discovered = discovery.try_recv().unwrap();
+            assert_eq!(discovered.ip, from.ip());
+            assert_eq!(discovered.device, id);
+            assert!(matches!(direct.try_recv().unwrap(), Response::Scan(dev) if dev == discovered));
+        }
+    }
+
+    #[tokio::test]
+    async fn scan_reply_accepts_dhcp_address_change() {
+        let inner = ClientInner::default();
+        let (tx, mut discovery) = channel(8);
+        let id = "12:34:56:78:9A:BC:DE:F0";
+
+        for ip in ["192.0.2.10", "192.0.2.11"] {
+            let source = (ip.parse::<IpAddr>().unwrap(), SCAN_PORT).into();
+            let reply = scan_reply(id, "H6072", Some(ip));
+            process_packet(source, &reply, &inner, &tx).await.unwrap();
+            let discovered = discovery.try_recv().unwrap();
+            assert_eq!(discovered.device, id);
+            assert_eq!(discovered.sku, "H6072");
+            assert_eq!(discovered.ip, source.ip());
+        }
     }
 }

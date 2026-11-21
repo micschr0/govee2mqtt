@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from queue import Queue
 import socket
+import ssl
 import struct
 import subprocess
 import sys
@@ -143,29 +144,42 @@ def assert_http(pid, port):
           "bridge did not bind HTTP exclusively to the selected loopback address")
 
 
-def exchange(conn, requests):
+def exchange(conn, requests, *, brightness=42):
     conn.settimeout(TIMEOUT)
     with conn.makefile("rb") as stream:
         check(receive(stream)[0] == 1, "broker fixture did not see MQTT CONNECT")
-        conn.sendall(b"\x20\x02\x00\x00")
+        conn.sendall(b"\x20\x02\x00\x00")  # No existing MQTT session.
+        missing = {b"homeassistant/status", b"gv2mqtt/light/+/command"}
+        config = None
         deadline = time.monotonic() + TIMEOUT
         while time.monotonic() < deadline:
-            kind, packet = receive(stream)
+            try:
+                kind, packet = receive(stream)
+            except TimeoutError:
+                break
             if kind == 8:
-                conn.sendall(b"\x90\x03" + packet[:2] + b"\x00")
+                offset, grants = 2, bytearray()
+                while offset < len(packet):
+                    size = int.from_bytes(packet[offset:offset+2], "big")
+                    missing.discard(packet[offset+2:offset+2+size])
+                    grants.append(0)
+                    offset += size + 3
+                conn.sendall(bytes([0x90, 2 + len(grants)]) + packet[:2] + grants)
             elif kind == 12:
                 conn.sendall(b"\xd0\x00")
             elif kind == 3:
                 size = int.from_bytes(packet[:2], "big")
                 if packet[2:2+size].decode() == CONFIG_TOPIC:
                     config = json.loads(packet[2+size:])
-                    break
-        else:
-            raise AssertionError("light discovery config never arrived")
+            if config is not None and not missing:
+                break
+        check(not missing, f"MQTT connection missing SUBSCRIBE for {sorted(missing)!r}")
+        check(config is not None, "light discovery config never arrived")
         check(not config["effect"], "unexpected online scenes in fixture")
         for message, command in [
             ({"state": "OFF"}, {"cmd": "turn", "data": {"value": 0}}),
-            ({"state": "ON", "brightness": 42}, {"cmd": "brightness", "data": {"value": 42}}),
+            ({"state": "ON", "brightness": brightness},
+             {"cmd": "brightness", "data": {"value": brightness}}),
             ({"state": "ON", "color_temp": 250}, {
                 "cmd": "colorwc", "data": {"color": {"r": 0, "g": 0, "b": 0},
                                            "colorTemInKelvin": 4000},
@@ -180,22 +194,26 @@ def exchange(conn, requests):
                 size = int.from_bytes(packet[:2], "big")
                 if packet[2:2+size].decode() == config["state_topic"]:
                     state = json.loads(packet[2+size:])
-                    if state.get("brightness") == 42 and state.get("color_temp") == 250:
+                    if state.get("brightness") == brightness and state.get("color_temp") == 250:
                         break
         else:
             raise AssertionError("bridge did not publish the LAN fixture's updated status")
-        return tuple(config["device"]["identifiers"]), config["unique_id"], config["command_topic"]
+        return (tuple(config["device"]["identifiers"]), config["unique_id"],
+                config["command_topic"], config["state_topic"])
 
 
-def bridge(binary, proxy_mode=None, http=False, blank_key=False):
+def bridge(binary, proxy_mode=None, http=False, blank_key=False, reconnect=False):
     with fixtures(proxy_mode) as (requests, cloud, proxy), tempfile.TemporaryDirectory() as tmp, \
             socket.create_server((IP, 0)) as broker, tempfile.TemporaryFile() as logs:
         env = {"GOVEE_CACHE_DIR": tmp, "HTTPS_PROXY": proxy, "NO_PROXY": IP,
                "GOVEE_MQTT_HOST": IP, "GOVEE_MQTT_PORT": str(broker.getsockname()[1])}
-        cache = Path(tmp) / "govee2mqtt-cache.sqlite"
+        legacy_cache = Path(tmp) / "govee2mqtt-cache.sqlite"
+        legacy_cache.touch(mode=0o600)  # SQLite accepts an empty database file.
+        cache = legacy_cache.with_name("govee2mqtt-cache-v2.sqlite")
         if proxy_mode:
             env["GOVEE_API_KEY"] = SECRET
             cache.write_text("synthetic invalid database")
+            cache.chmod(0o600)
         elif blank_key:
             env["GOVEE_API_KEY"] = " "
         args = [binary, "serve", "--no-multicast", "--scan", IP]
@@ -214,12 +232,24 @@ def bridge(binary, proxy_mode=None, http=False, blank_key=False):
                     if proxy_mode:
                         check(b"CONNECT openapi.api.govee.com:443" in cloud.get(timeout=5),
                               "cloud fixture did not receive the expected opt-in request")
-                    else:
-                        check(cloud.empty(), "cloud request without opt-in")
                     if http:
                         assert_http(process.pid, http_port)
                     else:
                         check(not listeners(process.pid), "unexpected default TCP listener")
+                    if reconnect:
+                        conn.shutdown(socket.SHUT_RDWR)
+                if reconnect:
+                    try:
+                        conn, _ = broker.accept()
+                    except TimeoutError as err:
+                        raise AssertionError("bridge did not reconnect after MQTT TCP shutdown") from err
+                    with conn:
+                        # A different brightness rules out pre-disconnect state as readback.
+                        check(exchange(conn, requests, brightness=63) == identity,
+                              "MQTT identity changed after TCP reconnect")
+                        check(process.poll() is None, "bridge exited during MQTT reconnect")
+                if not proxy_mode:
+                    check(cloud.empty(), "cloud request without opt-in")
             finally:
                 if process.poll() is None:
                     process.terminate()
@@ -233,11 +263,110 @@ def bridge(binary, proxy_mode=None, http=False, blank_key=False):
                 if sys.exc_info()[0] is not None:
                     print(output.replace(SECRET, "[redacted]"), file=sys.stderr)
                 check(SECRET not in output, "cloud key appeared in bridge logs")
+                check(legacy_cache.read_bytes() == b"", "bridge modified the legacy cache")
                 if proxy_mode:
                     check("Platform API refresh failed;" in output, "cloud failure was not handled")
+                    check("Cloud cache unavailable; continuing without a disk cache" in output,
+                          "bridge did not fall back when opening the invalid v2 cache")
                     check(cache.read_text() == "synthetic invalid database",
-                          "bridge overwrote the invalid DB without permission")
+                          "bridge overwrote the invalid v2 cache")
+                else:
+                    check(not any(cache.parent.glob(f"{cache.name}*")),
+                          "bridge created a cache without cloud opt-in")
             return identity
+
+
+def verify_mqtt_tls(binary):
+    with tempfile.TemporaryDirectory() as cwd:
+        root = Path(cwd)
+
+        def openssl(*args):
+            subprocess.run(["openssl", *args], cwd=cwd, capture_output=True, check=True, timeout=10)
+
+        for name in ("ca", "other-ca"):
+            openssl("req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
+                    "-nodes", "-subj", f"/CN=MQTT fixture {name}", "-days", "1",
+                    "-addext", "basicConstraints=critical,CA:TRUE",
+                    "-addext", "keyUsage=critical,keyCertSign,cRLSign",
+                    "-keyout", f"{name}.key", "-out", f"{name}.pem")
+        openssl("req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
+                "-nodes", "-subj", "/CN=mqtt.fixture.invalid",
+                "-keyout", "server.key", "-out", "server.csr")
+        (root / "server.ext").write_text("subjectAltName=DNS:localhost\nextendedKeyUsage=serverAuth\n")
+        openssl("x509", "-req", "-in", "server.csr", "-CA", "ca.pem", "-CAkey", "ca.key",
+                "-CAcreateserial", "-days", "1", "-extfile", "server.ext", "-out", "server.pem")
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(root / "server.pem", root / "server.key")
+        args = [binary, "serve", "--no-multicast"]
+        env = {"GOVEE_CACHE_DIR": cwd, "GOVEE_MQTT_HOST": "localhost"}
+
+        (root / "malformed.pem").write_text("not a PEM certificate")
+        with socket.create_server((IP, 0)) as broker:
+            invalid_port = str(broker.getsockname()[1])
+            for ca, error in (("missing.pem", b"MQTT TLS CA file"),
+                              ("", b"MQTT TLS CA file"),
+                              (".", b"MQTT TLS CA file"),
+                              ("malformed.pem", b"MQTT TLS connection failed")):
+                result = subprocess.run(args, cwd=cwd,
+                                        env={**env, "GOVEE_MQTT_TLS_CA": ca,
+                                             "GOVEE_MQTT_PORT": invalid_port},
+                                        capture_output=True, timeout=5)
+                check(result.returncode == 1 and error in result.stderr,
+                      f"invalid TLS CA {ca!r} did not fail startup: {result.stderr!r}")
+        result = subprocess.run(args, cwd=cwd, env={**env, "GOVEE_MQTT_TLS_CA": "ca.pem",
+                                                   "GOVEE_MQTT_PORT": "0"},
+                                capture_output=True, timeout=5)
+        check(result.returncode == 1 and b"MQTT TLS requires a nonzero TCP port" in result.stderr,
+              "MQTT TLS permitted port 0")
+
+        for label, host, ca, cli in [
+            ("trusted CA", "localhost", "missing.pem", ["--mqtt-tls-ca", "ca.pem"]),
+            ("wrong CA", "localhost", "other-ca.pem", []),
+            ("hostname mismatch", IP, "ca.pem", []),
+            ("plaintext listener", "localhost", "ca.pem", []),
+        ]:
+            with socket.create_server((IP, 0)) as broker:
+                broker.settimeout(5)
+                config = {**env, "GOVEE_MQTT_TLS_CA": ca, "GOVEE_MQTT_HOST": host,
+                          "GOVEE_MQTT_PORT": str(broker.getsockname()[1])}
+                with subprocess.Popen(args + cli, cwd=cwd, env=config, stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT) as process:
+                    try:
+                        conn, _ = broker.accept()
+                        with conn:
+                            conn.settimeout(5)
+                            check(conn.recv(1, socket.MSG_PEEK) == b"\x16",
+                                  f"{label}: connection did not start with TLS")
+                            if cli:
+                                with context.wrap_socket(conn, server_side=True) as secure, \
+                                        secure.makefile("rb") as stream:
+                                    check(receive(stream)[0] == 1, "TCP/TLS did not carry MQTT CONNECT")
+                                    secure.sendall(b"\x20\x02\x00\x00")
+                                    secure.settimeout(10)  # MQTT starts after a 5-second LAN grace period.
+                                    check(receive(stream)[0] == 8, "TLS did not carry MQTT SUBSCRIBE")
+                            elif label != "plaintext listener":
+                                try:
+                                    with context.wrap_socket(conn, server_side=True):
+                                        raise AssertionError(f"{label}: TLS handshake succeeded")
+                                except ssl.SSLError:
+                                    pass
+                        if not cli:
+                            output, _ = process.communicate(timeout=15)
+                            check(process.returncode == 1 and b"MQTT TLS" in output,
+                                  f"{label}: did not fail MQTT TLS startup\n{output.decode()}")
+                            broker.setblocking(False)
+                            while True:
+                                try:
+                                    retry, _ = broker.accept()
+                                except BlockingIOError:
+                                    break
+                                with retry:
+                                    retry.settimeout(1)
+                                    check(retry.recv(1) in (b"", b"\x16"),
+                                          f"{label}: plaintext MQTT retry")
+                    finally:
+                        if process.poll() is None:
+                            process.kill()
 
 
 def main():
@@ -250,14 +379,16 @@ def main():
                                  cwd=cwd, env={}, capture_output=True, timeout=5)
     check(invalid.returncode != 0 and b"not-an-address" in invalid.stderr,
           "invalid HTTP bind did not fail at startup")
-    expected = bridge(binary)
+    verify_mqtt_tls(binary)
+    expected = bridge(binary, reconnect=True)
     for restart in range(3):
         check(bridge(binary, blank_key=restart == 2) == expected, "MQTT identity changed after restart")
     for failure in ["503", "disconnect"]:
         check(bridge(binary, proxy_mode=failure) == expected, "MQTT identity changed on cloud failure")
     check(bridge(binary, http=True) == expected, "MQTT identity changed on HTTP opt-in")
-    print("PASS: LAN commands/readback, three MQTT restarts, HTTP opt-in, "
-          "cloud 503 and disconnect, corrupt cache preserved")
+    print("PASS: LAN commands/readback, MQTT TCP reconnect with fresh subscriptions and stable identity, "
+          "three bridge restarts, HTTP opt-in, "
+          "cloud 503 and disconnect, corrupt cache preserved, MQTT TLS without fallback")
 
 
 if __name__ == "__main__":

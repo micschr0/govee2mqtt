@@ -81,6 +81,22 @@ class LauncherTest(unittest.TestCase):
         self.assertNotIn("supervisor-secret", result.stdout + result.stderr)
         self.assertNotIn("GOVEE_HTTP_BIND", env)
         self.assertNotIn("GOVEE_API_KEY", env)
+        self.assertNotIn("GOVEE_MQTT_TLS_CA", env)
+
+    def test_explicit_broker_can_opt_into_tls(self):
+        result, env = self.launch(mqtt_host="broker.fixture", mqtt_tls_ca="/app/config/local CA.pem")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(env["GOVEE_MQTT_HOST"], "broker.fixture")
+        self.assertEqual(env["GOVEE_MQTT_TLS_CA"], "/app/config/local CA.pem")
+        self.assertNotIn("GOVEE_MQTT_PORT", env)
+        self.assertNotIn("GOVEE_MQTT_PASSWORD", env)
+
+    def test_tls_without_explicit_host_does_not_use_supervisor_broker(self):
+        result, env = self.launch(broker="available", mqtt_tls_ca="/app/config/ca.pem")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(env, {})
+        self.assertIn("mqtt_tls_ca requires mqtt_host", result.stderr)
+        self.assertNotIn("waiting for the Mosquitto broker", result.stdout)
 
     def test_missing_broker_fails_before_starting_bridge(self):
         result, env = self.launch()

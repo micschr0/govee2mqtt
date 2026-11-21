@@ -7,3 +7,7 @@ rusqlite 0.41.1 to use libsqlite3-sys 0.39.1 / SQLite 3.54.1. The upstream u64 S
 conversions as required by rusqlite 0.41, and Rustfmt was applied. Keep this patch
 until upstream provides a compatible fixed release. The project's cache
 round-trip test verifies the bundled SQLite version and cache operations.
+
+`Cache::clear` deletes rows from all cache topics in one SQLite transaction.
+Purge leaves open connections and topic handles usable and does not open or
+create an unused cache. Refreshes already in flight can write after the purge.

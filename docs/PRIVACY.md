@@ -9,24 +9,24 @@ The online scene catalog receives the device model (SKU) and does not require
 credentials itself. See [cloud opt-in](CONFIG.md#govee-cloud-opt-in) for when
 this catalog is used.
 
-Device lists and configuration are cached locally to reduce API calls.
-Depending on deployment, cache data and IoT keys live under `/data` or the
-add-on configuration directory `/app/config`.
+Cloud metadata is cached locally to reduce API calls. The Docker and Home
+Assistant packages store `govee2mqtt-cache-v2.sqlite` under `/data` by default.
+The cache separates entries by configured account or API key. Login results
+and downloaded IoT key material are not stored in this database; cloud account
+login is refreshed after a restart. IoT also writes a certificate and private
+key to separate files (`/dev/shm` by default).
 
-The bridge contains no usage telemetry sent to project maintainers.
-Treat credentials, keys, cache files and logs as confidential.
-When enabled, the HTTP API exposes data and control functions without
-authentication on the configured bind address.
+The old `govee2mqtt-cache.sqlite` is not migrated or removed. It and its
+SQLite sidecar files may still contain credentials. Keep them private and
+remove them only after verifying the upgrade and deciding they are no longer
+needed for rollback. Treat cache files, keys, configuration and logs as
+confidential. The bridge sends no usage telemetry to project maintainers.
 
-The MQTT connection does not configure TLS: credentials and commands are
-visible to anyone able to observe its network traffic. Use a trusted, isolated
-network or an independently encrypted tunnel; choosing port 8883 alone does
-not enable encryption. LAN discovery is unauthenticated and can be spoofed by
-another host on the network. Limit access to trusted devices.
+[MQTT TLS](CONFIG.md#mqtt-configuration) is optional. Without it, use a
+trusted, isolated network or an encrypted tunnel. Choosing port 8883 alone does
+not enable encryption. [LAN discovery](LAN.md) still cannot authenticate
+responses, even when MQTT uses TLS.
 
-The optional HTTP API also accepts state-changing GET requests without
-authentication or CSRF protection. Even a loopback bind can be reached by a
-browser visiting an untrusted page. Leave it disabled unless this risk is
-acceptable. Restrict access to cache directories: cached account tokens and
-IoT credentials may be present, and sharing a cache across accounts can reuse
-previous credentials.
+The optional [HTTP API](CONFIG.md#http-api-and-webui) has no authentication.
+Its browser checks do not restrict direct clients. Leave it disabled unless
+needed, prefer loopback and never expose it to an untrusted network.

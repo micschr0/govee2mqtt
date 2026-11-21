@@ -34,6 +34,7 @@ schema:
   govee_api_key: "password?"
   mqtt_host: "str?"
   mqtt_port: "int?"
+  mqtt_tls_ca: "str?"
   mqtt_username: "str?"
   mqtt_password: "password?"
   debug_level: "str?"

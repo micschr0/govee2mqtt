@@ -17,10 +17,23 @@ No HTTP listener starts by default. MQTT and LAN do not require it.
 - Empty or invalid CLI/ENV values are errors. An empty add-on field counts as unset.
 - To disable HTTP, remove the option and environment value. `--http-port` is no longer supported.
 
-The enabled API has **no authentication**. Use loopback for local access only.
+The enabled WebUI and API have **no authentication**: any client that can
+reach the listener can read device data and send control commands. Use
+loopback for local access only; do not expose this port to untrusted networks.
 `0.0.0.0:8056` binds all IPv4 interfaces; `[::]:8056` binds all IPv6 interfaces
 and, depending on the system, IPv4 as well. Non-loopback bindings produce a
 startup warning.
+
+Open the WebUI at `http://127.0.0.1:8056/`, or use the address and port you
+configured. The listener accepts IP literals and `localhost`, not other DNS
+names. The API rejects cross-origin browser requests when it receives
+`Origin` or Fetch Metadata headers. Direct HTTP clients do not need these
+headers; the browser checks are not access control. The WebUI cannot be
+embedded in a frame and loads all assets from the bridge, without internet access.
+
+Device control and One-Click activation now require `POST` on the same URL
+(no request body needed). Change any scripts using `GET` for control; `GET`
+and `HEAD` on these paths no longer run commands. Read endpoints still use `GET`.
 
 ## Govee cloud opt-in
 
@@ -62,9 +75,28 @@ Use the same broker as the Home Assistant MQTT integration.
 |CLI|ENV|Add-on|Purpose|
 |---|---|-----|-------|
 |`--mqtt-host`|`GOVEE_MQTT_HOST`|`mqtt_host`|Broker hostname or IP|
-|`--mqtt-port`|`GOVEE_MQTT_PORT`|`mqtt_port`|Broker port, default `1883`|
+|`--mqtt-port`|`GOVEE_MQTT_PORT`|`mqtt_port`|Broker port, default `1883` without TLS or `8883` with TLS|
+|`--mqtt-tls-ca`|`GOVEE_MQTT_TLS_CA`|`mqtt_tls_ca`|Path to a PEM CA file; setting it enables TLS|
 |`--mqtt-username`|`GOVEE_MQTT_USER`|`mqtt_username`|Broker username|
 |`--mqtt-password`|`GOVEE_MQTT_PASSWORD`|`mqtt_password`|Broker password|
+
+Without a CA file, MQTT uses plaintext. The add-on still uses the internal
+MQTT service from Supervisor when `mqtt_host` is not set.
+
+For TLS, use the hostname in the broker certificate and pass the PEM file for
+the CA that signed it. CLI options take precedence over environment variables.
+The add-on requires `mqtt_host` when `mqtt_tls_ca` is set. Put the CA file in
+the add-on configuration directory and use the container path, for example:
+
+```yaml
+mqtt_host: "broker.lan"
+mqtt_tls_ca: "/app/config/mqtt-ca.pem"
+```
+
+The bridge verifies the certificate chain and broker hostname. If TLS setup or
+the initial TLS connection fails, startup fails without retrying in plaintext.
+This secures the connection to the MQTT broker only; it does not change Govee
+LAN discovery or enable Govee Cloud.
 
 ## Operation
 

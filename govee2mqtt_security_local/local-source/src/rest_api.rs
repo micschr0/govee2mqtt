@@ -1,4 +1,4 @@
-use crate::cache::{cache_get, CacheComputeResult, CacheGetOptions};
+use crate::cache::{cache_get, scoped_topic, CacheComputeResult, CacheGetOptions, CacheStorage};
 use crate::platform_api::{http_response_body, ONE_WEEK};
 use reqwest::Method;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -17,18 +17,22 @@ fn endpoint(url: &str) -> String {
 #[derive(Clone)]
 pub struct RestApiClient {
     key: String,
+    cache_topic: String,
 }
 
 #[allow(unused)]
 impl RestApiClient {
     pub fn new<K: Into<String>>(key: K) -> Self {
-        Self { key: key.into() }
+        let key = key.into();
+        let cache_topic = scoped_topic("rest-api", &key);
+        Self { key, cache_topic }
     }
 
     pub async fn list_devices(&self) -> anyhow::Result<Vec<RestDeviceInfo>> {
         cache_get(
             CacheGetOptions {
-                topic: "rest-api",
+                storage: CacheStorage::Disk,
+                topic: &self.cache_topic,
                 key: "device-list",
                 soft_ttl: Duration::from_secs(900),
                 hard_ttl: ONE_WEEK,

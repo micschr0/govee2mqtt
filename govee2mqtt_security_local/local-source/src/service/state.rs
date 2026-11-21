@@ -104,14 +104,18 @@ impl State {
             .await
             .ok_or_else(|| anyhow::anyhow!("device '{label}' not found"))?;
         let semaphore = self.semaphore_for_device(&device).await;
+        let device_id = device.id;
         let permit = semaphore.acquire_owned().await?;
+        let device = self
+            .device_by_id(&device_id)
+            .await
+            .with_context(|| format!("device '{device_id}' not found"))?;
         let (tx, rx) = tokio::sync::oneshot::channel();
 
         // Schedule a task that will poll the device a short
         // time after the Coordinator is dropped, to reconcile
         // any changed state
         let state = self.clone();
-        let device_id = device.id.to_string();
         tokio::spawn(async move {
             let _ = rx.await;
             state.poll_after_control(device_id).await
@@ -729,6 +733,41 @@ pub fn sort_and_dedup_scenes(mut scenes: Vec<String>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn waiting_for_control_refreshes_device_by_id_after_ip_change() {
+        let state = Arc::new(State::new());
+        let id = "00:00:00:00:00:00:01";
+        let sku = "H6072";
+        let old_ip = "192.0.2.10";
+        let new_ip = "192.0.2.11".parse().unwrap();
+        let mut lan = LanDevice {
+            ip: old_ip.parse().unwrap(),
+            device: id.into(),
+            sku: sku.into(),
+            ble_version_hard: String::new(),
+            ble_version_soft: String::new(),
+            wifi_version_hard: String::new(),
+            wifi_version_soft: String::new(),
+        };
+        state.device_mut(sku, id).await.set_lan_device(lan.clone());
+
+        let held = state.resolve_device_for_control(id).await.unwrap();
+        let mut waiting = std::pin::pin!(state.resolve_device_for_control(old_ip));
+        // Poll the second lookup while only the control permit is held.
+        tokio::select! {
+            biased;
+            _ = &mut waiting => panic!("control permit was not held"),
+            _ = std::future::ready(()) => {}
+        }
+        lan.ip = new_ip;
+        state.device_mut(sku, id).await.set_lan_device(lan);
+        drop(held);
+
+        let device = waiting.await.unwrap();
+        assert_eq!(device.id, id);
+        assert_eq!(device.ip_addr(), Some(new_ip));
+    }
 
     #[tokio::test]
     async fn lan_only_mode_does_not_activate_cloud_scenes() {

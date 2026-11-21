@@ -41,6 +41,9 @@ set_option() {
 if bashio::config.has_value mqtt_host; then
   set_option mqtt_host GOVEE_MQTT_HOST
 else
+  if bashio::config.has_value mqtt_tls_ca; then
+    bashio::exit.nok "mqtt_tls_ca requires mqtt_host; configure the TLS broker explicitly"
+  fi
   if ! wait_for_mqtt; then
     bashio::exit.nok "Mosquitto MQTT broker is not available"
   fi
@@ -53,6 +56,7 @@ else
 fi
 
 set_option mqtt_port GOVEE_MQTT_PORT
+set_option mqtt_tls_ca GOVEE_MQTT_TLS_CA
 set_option mqtt_username GOVEE_MQTT_USER
 set_option mqtt_password GOVEE_MQTT_PASSWORD
 set_option http_bind GOVEE_HTTP_BIND

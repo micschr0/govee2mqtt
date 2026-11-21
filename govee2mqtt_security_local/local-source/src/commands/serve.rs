@@ -162,33 +162,33 @@ async fn enumerate_devices_via_account_api(
     Ok(())
 }
 
-async fn refresh_cloud<Fut: Future<Output = anyhow::Result<()>>>(
+const CLOUD_RETRY: Duration = Duration::from_secs(60);
+const CLOUD_REFRESH_INTERVAL: Duration = Duration::from_secs(600);
+
+async fn refresh_cloud<Refresh: Future<Output = anyhow::Result<()>>, Wait: Future<Output = ()>>(
     service: &str,
-    retry: Duration,
-    interval: Duration,
-    mut refresh: impl FnMut() -> Fut,
+    mut refresh: impl FnMut() -> Refresh,
+    wait: impl Fn(Duration) -> Wait,
 ) {
     loop {
         let delay = match refresh().await {
-            Ok(()) => interval,
+            Ok(()) => CLOUD_REFRESH_INTERVAL,
             Err(err) => {
                 log::warn!(
                     "{service} refresh failed; LAN and MQTT remain active; retrying in {}s",
-                    retry.as_secs()
+                    CLOUD_RETRY.as_secs()
                 );
                 if crate::undoc_api::should_log_sensitive_data() {
                     log::debug!("{service}: {err:#}");
                 }
-                retry
+                CLOUD_RETRY
             }
         };
-        sleep(delay).await;
+        wait(delay).await;
     }
 }
 
 fn spawn_cloud_discovery(state: &StateHandle, args: &crate::Args) {
-    let retry = Duration::from_secs(60);
-    let interval = Duration::from_secs(600);
     let platform = args.api_args.api_client().ok();
     let account = args.undoc_args.api_client().ok();
     if platform.is_none() && account.is_none() {
@@ -198,9 +198,11 @@ fn spawn_cloud_discovery(state: &StateHandle, args: &crate::Args) {
     if let Some(client) = platform {
         let state = state.clone();
         tokio::spawn(async move {
-            refresh_cloud("Platform API", retry, interval, || {
-                enumerate_devices_via_platform_api(&state, &client)
-            })
+            refresh_cloud(
+                "Platform API",
+                || enumerate_devices_via_platform_api(&state, &client),
+                sleep,
+            )
             .await
         });
     }
@@ -208,9 +210,11 @@ fn spawn_cloud_discovery(state: &StateHandle, args: &crate::Args) {
         let state = state.clone();
         let args = args.undoc_args.clone();
         tokio::spawn(async move {
-            refresh_cloud("Govee account", retry, interval, || {
-                enumerate_devices_via_account_api(&state, &client, &args)
-            })
+            refresh_cloud(
+                "Govee account",
+                || enumerate_devices_via_account_api(&state, &client, &args),
+                sleep,
+            )
             .await
         });
     }
@@ -218,7 +222,7 @@ fn spawn_cloud_discovery(state: &StateHandle, args: &crate::Args) {
     let state = state.clone();
     tokio::spawn(async move {
         loop {
-            sleep(retry).await;
+            sleep(CLOUD_RETRY).await;
             state.refresh_device_scene_names().await;
         }
     });
@@ -414,6 +418,14 @@ mod tests {
             atomic::{AtomicUsize, Ordering},
             Arc,
         };
+        use tokio::sync::{mpsc, oneshot};
+
+        enum Outcome {
+            Unavailable,
+            ConnectionRefused,
+            Recovered(&'static str),
+        }
+        use Outcome::*;
 
         const ID: &str = "00:00:00:00:00:00:00:01";
         let state = Arc::new(State::new());
@@ -433,6 +445,10 @@ mod tests {
             });
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("http://{}/devices", listener.local_addr().unwrap());
+        // Reserve a port without listening so connect fails without a port race.
+        let refused = tokio::net::TcpSocket::new_v4().unwrap();
+        refused.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+        let refused_url = format!("http://{}/devices", refused.local_addr().unwrap());
         let hits = Arc::new(AtomicUsize::new(0));
         let router = Router::new().route(
             "/devices",
@@ -452,50 +468,88 @@ mod tests {
             }),
         );
         let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let (result_tx, mut results) = mpsc::unbounded_channel();
+        let (wait_tx, mut waits) = mpsc::unbounded_channel();
         let worker_state = state.clone();
         let worker = tokio::spawn(async move {
             let client = GoveeApiClient::new("synthetic");
+            let mut urls = [&url, &refused_url, &url].into_iter().cycle();
             refresh_cloud(
                 "Fixture",
-                Duration::from_millis(20),
-                Duration::from_millis(20),
-                || async {
-                    let result = client.fetch_devices(url.clone()).await;
-                    let result = match result {
-                        Ok(devices) => {
-                            update_platform_inventory(&worker_state, &client, devices).await;
-                            Ok(())
-                        }
-                        Err(err) => Err(err),
-                    };
-                    tx.send(
+                || {
+                    let url = urls.next().unwrap().clone();
+                    let (client, state, tx) = (&client, &worker_state, &result_tx);
+                    async move {
+                        let result = match client.fetch_devices(url).await {
+                            Ok(devices) => {
+                                update_platform_inventory(state, client, devices).await;
+                                Ok(())
+                            }
+                            Err(err) => Err(err),
+                        };
+                        tx.send(result.as_ref().copied().map_err(|err| {
+                            let refused = err.chain().any(|cause| {
+                                cause.downcast_ref::<std::io::Error>().is_some_and(|err| {
+                                    err.kind() == std::io::ErrorKind::ConnectionRefused
+                                })
+                            });
+                            (format!("{err:#}"), refused)
+                        }))
+                        .unwrap();
                         result
-                            .as_ref()
-                            .map(|_| ())
-                            .map_err(|err| format!("{err:#}")),
-                    )
-                    .unwrap();
-                    result
+                    }
+                },
+                |delay| {
+                    // Let the LAN assertion finish before allowing another cloud attempt.
+                    let (resume, wait) = oneshot::channel();
+                    wait_tx.send((delay, resume)).unwrap();
+                    async { wait.await.unwrap() }
                 },
             )
             .await;
         });
 
         tokio::time::timeout(Duration::from_secs(10), async {
-            for ready in [false, true, false, true, false, true] {
-                let event = rx.recv().await.unwrap();
-                if ready {
-                    assert!(event.is_ok(), "{event:?}");
-                } else {
-                    assert!(event.unwrap_err().contains("503"));
-                }
+            let mut expected_name = None;
+            for outcome in [
+                Unavailable,
+                ConnectionRefused,
+                Recovered("Cloud 1"),
+                Unavailable,
+                ConnectionRefused,
+                Recovered("Cloud 3"),
+                Unavailable,
+                ConnectionRefused,
+                Recovered("Cloud 5"),
+            ] {
+                let result = results.recv().await.unwrap();
+                let (delay, resume) = waits.recv().await.unwrap();
+                let seconds = match outcome {
+                    Unavailable => {
+                        let (error, _) = result.unwrap_err();
+                        assert!(error.contains("status 503: Service Unavailable"), "{error}");
+                        60
+                    }
+                    ConnectionRefused => {
+                        let (error, refused) = result.unwrap_err();
+                        assert!(refused, "expected a refused connection: {error}");
+                        60
+                    }
+                    Recovered(name) => {
+                        result.unwrap();
+                        expected_name = Some(name);
+                        600
+                    }
+                };
+                assert_eq!(delay, Duration::from_secs(seconds));
                 let device = state.device_by_id(ID).await.unwrap();
                 assert_eq!(topic_safe_id(&device), local_id);
                 assert_eq!(state.devices().await.len(), 1);
-                if ready {
-                    assert!(device.govee_name().unwrap().starts_with("Cloud "));
-                }
+                assert_eq!(device.govee_name(), expected_name);
+                assert_eq!(
+                    state.get_platform_client().await.is_some(),
+                    expected_name.is_some()
+                );
                 device
                     .lan_device
                     .unwrap()
@@ -508,6 +562,7 @@ mod tests {
                     serde_json::from_slice::<serde_json::Value>(&bytes[..size]).unwrap(),
                     json!({"msg": {"cmd": "brightness", "data": {"value": 42}}})
                 );
+                resume.send(()).unwrap();
             }
         })
         .await
