@@ -8,6 +8,8 @@ Docker builds. The authoritative changelog is in the add-on directory.
 ## Verify before asking for approval
 
 1. Run `make verify` and `make runtime` in a disposable test environment.
+   Both commands honor `CARGO_TARGET_DIR`; runtime checks use local fixtures,
+   not real devices or cloud services.
 2. Complete [container and upgrade checks](ADDON-VERIFICATION.md) for the same
    source revision. Keep amd64 and aarch64 results separate from the isolated
    Supervisor upgrade.

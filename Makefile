@@ -23,7 +23,7 @@ verify: fmt clippy test build integrity
 	python3 -m unittest discover -s tests -v
 
 runtime: build
-	python3 scripts/verify-runtime.py "$(SOURCE_DIR)/target/debug/govee"
+	cd $(SOURCE_DIR) && python3 ../../scripts/verify-runtime.py "$${CARGO_TARGET_DIR:-target}/debug/govee"
 
 docker:
 	python3 scripts/check-store-source.py

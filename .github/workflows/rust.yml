@@ -39,10 +39,6 @@ jobs:
       run:
         # The sole application source tree.
         working-directory: govee2mqtt_security_local/local-source
-    permissions:
-      contents: read # checkout requires contents:read for actions/checkout
-      pull-requests: write # scttnlsn/covrs posts PR comments and annotations
-      checks: write # as check runs
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -73,6 +69,10 @@ jobs:
       - name: Test
         run: cargo test --locked
 
+      - name: Test packaging and release scripts
+        working-directory: .
+        run: python3 -m unittest discover -s tests -v
+
       - name: Build
         run: cargo build --locked
 
@@ -85,15 +85,12 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Generate coverage data (lcov)
-        run: cargo llvm-cov --locked --lcov --output-path lcov.info
-        working-directory: govee2mqtt_security_local/local-source
-
-      - name: Coverage PR comment
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        # Reporting is informational; GitHub can reject diffs over 20,000 lines.
-        continue-on-error: true
-        uses: scttnlsn/covrs@0a048b99b9b4b8aaa5d006d60caaf55c8a13c11d # v0.3.2
-        with:
-          coverage-files: govee2mqtt_security_local/local-source/lcov.info
-          annotate: true
+      - name: Generate coverage and publish summary
+        run: |
+          cargo llvm-cov --locked
+          cargo llvm-cov report > "$RUNNER_TEMP/coverage-summary.txt"
+          {
+            printf '## Rust coverage\n\n```text\n'
+            cat "$RUNNER_TEMP/coverage-summary.txt"
+            printf '```\n'
+          } >> "$GITHUB_STEP_SUMMARY"
