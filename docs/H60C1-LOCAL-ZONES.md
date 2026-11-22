@@ -195,6 +195,10 @@ acceptance and implementation are separate outcomes.
 
 ## Delivery to #10 and implementation gate
 
+The [offline acceptance kit](qa/H60C1-ACCEPTANCE.md) provides manifest validation,
+allowlisted capture summaries and a numbered owner handoff. It contains no
+H60C1 payloads and performs no live operations; physical acceptance remains pending.
+
 This inventory and protocol are the handoff to #10. Current automated result:
 source inspection only; zero H60C1 sends, replies, readbacks or physical trials.
 All manual observations are pending. #10 awaits owner hardware/captures and
