@@ -1,5 +1,15 @@
 # Changes
 
+## 2026.11.24
+
+- Advertise the H60C1 whole-light white temperature range of 2700–6500 K in
+  Home Assistant. Round the cool end inward so slider values stay in range.
+- Update the `url` dependency for RUSTSEC-2026-0592 and install the fixed Debian
+  `zlib1g` in the add-on image (DSA-6613-1).
+- Keep Git revision identifiers in local builds and package versions in
+  container builds.
+- Independent H60C1 zones are not included.
+
 ## 2026.11.23
 
 - Use Rust 1.100.0, updated direct dependencies and pinned Debian 13 build and

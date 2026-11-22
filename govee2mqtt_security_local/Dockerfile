@@ -34,7 +34,7 @@ RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
         'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261122T000000Z trixie-security main' \
         > /etc/apt/sources.list \
     && apt-get -o APT::Update::Error-Mode=any update \
-    && apt-get install -y --no-install-recommends ca-certificates libstdc++6 libssl3t64 \
+    && apt-get install -y --no-install-recommends ca-certificates libstdc++6 libssl3t64 zlib1g \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=source-builder /context/govee /app/govee

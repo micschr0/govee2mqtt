@@ -109,7 +109,9 @@ def fixtures(proxy_mode):
                 with conn:
                     conn.settimeout(3)
                     cloud.put(conn.recv(4096))
-                    if proxy_mode != "disconnect":
+                    if proxy_mode == "stall":
+                        stop.wait()
+                    elif proxy_mode != "disconnect":
                         conn.sendall(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n")
 
         workers = [threading.Thread(target=fn, daemon=True) for fn in (lamp, unavailable_cloud)]
@@ -192,11 +194,14 @@ def record_publish(packet, configs):
     return topic, payload
 
 
-def exchange(conn, requests, *, brightness=42):
+def exchange(conn, requests, *, brightness=42, cloud=None):
     conn.settimeout(TIMEOUT)
     with conn.makefile("rb") as stream:
         check(receive(stream)[0] == 1, "broker fixture did not see MQTT CONNECT")
         conn.sendall(b"\x20\x02\x00\x00")  # No existing MQTT session.
+        if cloud is not None:
+            check(b"CONNECT openapi.api.govee.com:443" in cloud.get(timeout=5),
+                  "cloud fixture did not receive the expected opt-in request")
         missing = {b"homeassistant/status", b"gv2mqtt/light/+/command"}
         configs = {}
         online = False
@@ -280,10 +285,7 @@ def bridge(binary, proxy_mode=None, http=False, blank_key=False, reconnect=False
             try:
                 conn, _ = broker.accept()
                 with conn:
-                    identity = exchange(conn, requests)
-                    if proxy_mode:
-                        check(b"CONNECT openapi.api.govee.com:443" in cloud.get(timeout=5),
-                              "cloud fixture did not receive the expected opt-in request")
+                    identity = exchange(conn, requests, cloud=cloud if proxy_mode else None)
                     if http:
                         assert_http(process.pid, http_port)
                     else:
@@ -317,7 +319,8 @@ def bridge(binary, proxy_mode=None, http=False, blank_key=False, reconnect=False
                 check(SECRET not in output, "cloud key appeared in bridge logs")
                 check(legacy_cache.read_bytes() == b"", "bridge modified the legacy cache")
                 if proxy_mode:
-                    check("Platform API refresh failed;" in output, "cloud failure was not handled")
+                    check(("Platform API refresh failed;" in output) == (proxy_mode != "stall"),
+                          "cloud failure handling did not match the proxy mode")
                     check("Cloud cache unavailable; continuing without a disk cache" in output,
                           "bridge did not fall back when opening the invalid v2 cache")
                     check(cache.read_text() == "synthetic invalid database",
@@ -439,11 +442,11 @@ def main():
         check(bridge(binary, blank_key=restart == 2, http=restart == 2) == expected,
               "MQTT discovery changed after restart")
     print("PASS: MQTT reconnect and five discovery configurations across three restarts")
-    for failure in ["503", "disconnect"]:
+    for failure in ["503", "disconnect", "stall"]:
         check(bridge(binary, proxy_mode=failure) == expected, "MQTT discovery changed on cloud failure")
     print("PASS: LAN commands/readback, MQTT TCP reconnect with fresh subscriptions, "
           "five stable discovery configs across three bridge restarts, HTTP opt-in and port conflict, "
-          "cloud 503 and disconnect, corrupt cache preserved, MQTT TLS without fallback")
+          "cloud 503, disconnect and unanswered CONNECT, corrupt cache preserved, MQTT TLS without fallback")
 
 
 if __name__ == "__main__":
