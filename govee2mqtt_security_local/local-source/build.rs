@@ -3,8 +3,6 @@ fn main() {
 
     if let Ok(env) = std::env::var("GOVEE_CI_TAG") {
         ci_tag = env.trim().to_string();
-    } else if let Ok(tag) = std::fs::read_to_string("../SOURCE_TAG") {
-        ci_tag = tag.trim().to_string();
     } else if let Ok(tag) = std::fs::read(".tag") {
         if let Ok(s) = String::from_utf8(tag) {
             ci_tag = s.trim().to_string();
@@ -34,7 +32,6 @@ fn main() {
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/refs");
     println!("cargo:rerun-if-changed=.tag");
-    println!("cargo:rerun-if-changed=../SOURCE_TAG");
     println!("cargo:rerun-if-env-changed=GOVEE_CI_TAG");
     println!("cargo:rustc-env=GOVEE_CI_TAG={ci_tag}");
 }

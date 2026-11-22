@@ -3,8 +3,8 @@
 Run this on a disposable Home Assistant OS/Supervisor instance that you control,
 not production. Use only a disposable MQTT broker and synthetic options and data.
 The maintainer performs all Supervisor, network and device steps. For
-`2026.11.23` the published experimental baseline is `2026.11.22` at
-`5769efa74ac67bd17f9b204fb79249c5ca063f50`. Use the full candidate SHA from the
+`2026.11.24` the published baseline is `2026.11.23` at
+`38ef135efd1e5e3b0a012c2cb2ec1272cf7822fd`. Use the full candidate SHA from the
 CI handoff, never a moving branch head. Copy the [evidence template](manual-acceptance.md)
 and record versions, architecture, dated results and redacted evidence separately.
 

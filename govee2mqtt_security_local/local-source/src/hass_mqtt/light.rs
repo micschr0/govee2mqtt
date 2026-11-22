@@ -176,7 +176,14 @@ impl DeviceLight {
             supported_color_modes.push("color_temp".to_string());
             // Note that min and max are swapped by the translation
             // from kelvin to mired
-            (Some(kelvin_to_mired(max)), Some(kelvin_to_mired(min)))
+            (
+                Some(if max == 0 {
+                    0
+                } else {
+                    1_000_000_u32.div_ceil(max)
+                }),
+                Some(kelvin_to_mired(min)),
+            )
         } else {
             (None, None)
         };
@@ -227,5 +234,39 @@ impl DeviceLight {
             device_id: device.id.to_string(),
             state: state.clone(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::service::hass::mired_to_kelvin;
+
+    #[tokio::test]
+    async fn h60c1_discovery_uses_safe_temperature_endpoints() {
+        let mut device = ServiceDevice::new("H60C1", "00:00:00:00:00:00:00:01");
+        device.lan_device = Some(crate::lan_api::LanDevice {
+            ip: "127.0.0.1".parse().unwrap(),
+            device: device.id.clone(),
+            sku: device.sku.clone(),
+            ble_version_hard: String::new(),
+            ble_version_soft: String::new(),
+            wifi_version_hard: String::new(),
+            wifi_version_soft: String::new(),
+        });
+        assert_eq!(device.get_color_temperature_range(), Some((2700, 6500)));
+
+        let light = DeviceLight::for_device(&device, &StateHandle::default(), None)
+            .await
+            .unwrap();
+        let discovery = serde_json::to_value(&light.light).unwrap();
+        assert_eq!(discovery["min_mireds"], 154);
+        assert_eq!(discovery["max_mireds"], 370);
+        assert!(discovery["supported_color_modes"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("color_temp")));
+        assert!((2700..=6500).contains(&mired_to_kelvin(154)));
+        assert!((2700..=6500).contains(&mired_to_kelvin(370)));
     }
 }
