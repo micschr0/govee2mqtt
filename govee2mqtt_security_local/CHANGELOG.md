@@ -1,5 +1,11 @@
 # Changes
 
+## 2026.11.25
+
+- Refresh the Store package version. Application behavior is unchanged.
+- The repository adds an offline H60C1 acceptance kit. Independent H60C1 zones
+  are not included in the add-on.
+
 ## 2026.11.24
 
 - Advertise the H60C1 whole-light white temperature range of 2700–6500 K in

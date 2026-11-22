@@ -4,15 +4,15 @@
     "amd64": "linux/amd64"
   },
   "baseline": "9b10da79bc1f184a181b3d008f68d6996d9a807a",
-  "content_id": "37278350e5f5a675f63e2aa012a3ee01f87d731b77fe310032aaf83c21c3d5d2",
+  "content_id": "7402649a27d38d800b728d9d91545e53b6e9c1ed29328c5c8c7fb0cf39370b4c",
   "input_sha256": {
-    "CHANGELOG.md": "c527bacfed2a78aa6a3dc51190a3f5f44c06f861dd312da514bba87e03f0fdf8",
+    "CHANGELOG.md": "cd6938b3052089a233c5242d2c90be2de575b1fa555e4da15eae50c5d0824113",
     "DOCS.md": "930a88a3cd9c1e91e3a65c2b5808251dc8cfcf1ffd3eadc43f83905d7d3ebf4c",
     "Dockerfile": "9acd86c846a0926e3ec4bcdb5b086d121acd32dd009d089bd3a0728e1350cfcc",
     "LICENSE.md": "4de4c4c0d2ae466d36143a9dd8fab6f821e49b8f2cc6ea03d1ac2badc9374351",
     "README.md": "43aac82c2f6b234317c51858163ed5ff9c5941c4cf4240db3248570ff6b6a661",
     "build.yaml": "563bc8d15b5a83a37f9fa668dc44759214461e4794e86109ca70ce4cf58eea03",
-    "config.yaml": "961753faedd7e3b49bf994209cb856c96e9ce6ce7063e50854404202547eee5a",
+    "config.yaml": "758e4950b3d02eb2c232f77586d1c0b810352540a22f0a6d41bbd2b740d00f27",
     "local-source/AmazonRootCA1.pem": "ad6fb002e6b34c0559fa8f93a3794ff12c4e3f119bd77290c52525123fb9ea74",
     "local-source/Cargo.lock": "8c92ba64ca3b228d6ec15a333842dcc504313ce55385d0f88d2567eb4a5c3525",
     "local-source/Cargo.toml": "5c4eb8a90f2bc753402289ef1e243020620ea1237cc5498010a1d8469def2ca5",
@@ -112,5 +112,5 @@
   "security_acceptance": "pending",
   "source_layout": "in-context",
   "spec": "1",
-  "version": "2026.11.24"
+  "version": "2026.11.25"
 }
