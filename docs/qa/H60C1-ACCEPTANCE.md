@@ -37,11 +37,11 @@ commands. The CLI uses only the Python 3 standard library and does not open
 sockets, discover lamps, change networks or run the application.
 
 ```sh
-python3 -m unittest discover -s scripts -p test_h60c1_acceptance.py -v
+python3 -m unittest discover -s tests -p test_h60c1_acceptance.py -v
 ```
 
-Offline verification on 2026-11-22: 11 CLI tests passed. The documented
-`tshark` conversion and all three CLI modes also passed against a synthetic
+Offline verification on 2026-11-22: the documented `tshark` conversion and
+all three CLI modes passed against a synthetic
 pcap with two transactions, an unpaired status report and unrelated traffic.
 These results verify the tooling, not H60C1 support.
 
@@ -208,8 +208,8 @@ record failures and use the agreed recovery without silently retrying.
 ## Capability matrix to complete with the owner
 
 Link each row to #3's inventory and private evidence IDs: manifest/command,
-actual readback (or unavailable), owner observations and confirmation. Initial
-`inconclusive — unexecuted` is a pending investigation, not an observed finding.
+actual readback (or unavailable), owner observations and confirmation. Keep
+unexecuted checks pending; reserve `inconclusive` for an observed result.
 
 | Capability | Evidence so far | Owner confirmation / evidence IDs |
 | --- | --- | --- |

@@ -23,6 +23,13 @@ def unique_object(pairs):
     return obj
 
 
+def strict_json(raw):
+    def reject_constant(_):
+        raise ValueError("invalid JSON constant")
+
+    return json.loads(raw, object_pairs_hook=unique_object, parse_constant=reject_constant)
+
+
 def plan(value):
     require(value["model"] == "H60C1" and value["firmware"] == "1.01.27")
     require(isinstance(value["steps"], list) and 0 < len(value["steps"]) <= 100)
@@ -73,7 +80,7 @@ def summarize_capture(lines, expected_writes=None):
                   "evidence_type": "device-report" if destination_port == "4002" else "sent-intent",
                   "command": "unparsed", "payload_bytes": len(raw)}
         try:
-            msg = json.loads(raw, object_pairs_hook=unique_object)["msg"]
+            msg = strict_json(raw)["msg"]
             cmd, data = msg["cmd"], msg.get("data", {})
             require(isinstance(cmd, str))
             if cmd in ("scan", "devStatus", "ptReal", "turn", "brightness", "colorwc"):
@@ -128,10 +135,10 @@ def main():
         parser.error("supply a capture file only with verify")
     try:
         if args.mode == "plan":
-            result = plan(json.load(sys.stdin, object_pairs_hook=unique_object))
+            result = plan(strict_json(sys.stdin.read()))
         elif args.mode == "verify":
             with open(args.capture, encoding="ascii") as capture:
-                result = verify(json.load(sys.stdin, object_pairs_hook=unique_object), capture)
+                result = verify(strict_json(sys.stdin.read()), capture)
         else:
             result = summarize_capture(sys.stdin)
     except (ValueError, KeyError, TypeError, AttributeError, binascii.Error, OSError):
