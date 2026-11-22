@@ -5,7 +5,7 @@ sources, assets, test data, vendored patches, manifest and lockfile. The enclosi
 directory is the complete Home Assistant build context. There is no root source
 copy or `addon/` template. See [layout and comparison](SOURCE-LAYOUT.md).
 
-Requires Rust 1.99.1, C/C++ build tools, CMake, pkg-config and OpenSSL prerequisites.
+Requires Rust 1.100.0, C/C++ build tools, CMake, pkg-config and OpenSSL prerequisites.
 From the repository root, run `make verify` (format, Clippy, tests, ordinary build,
 package integrity and Python fixture tests). Set `CARGO=/path/to/cargo` if needed.
 Equivalent Cargo checks:
@@ -23,21 +23,21 @@ Run CLI commands from that directory so the relative `assets/` path resolves.
 HTTP remains disabled without explicit configuration; running `--help` starts no
 services. Historical issue links and third-party attribution remain unchanged.
 
-Run `make runtime` on a disposable Linux runner; it needs free UDP ports
-4001–4003. For an already-built binary, use `python3 scripts/verify-runtime.py
-<binary>`. The suite uses a loopback-only simulated MQTT broker, LAN lamp and
-HTTPS proxy, and temporary cache data. It cuts the MQTT TCP connection without
-restarting the broker or bridge, then checks fresh subscriptions, unchanged Home
-Assistant discovery identity, and LAN commands and state readback. Separate
-checks cover bridge restarts, HTTP binding and startup while cloud is unavailable.
-For network isolation, run the fixture in a namespace with only loopback:
+Run `make runtime` on a disposable Linux runner with Python 3, OpenSSL, GNU
+`timeout` and free UDP ports 4001–4003. It checks launcher failures, the Rust
+cloud refresh worker over three outage/recovery cycles, and the bridge process
+with a simulated MQTT broker, LAN lamp and HTTPS proxy. The process check
+covers MQTT reconnect, five pinned discovery identities across bridge
+restarts, LAN commands/readback, HTTP bind failures and startup while cloud
+is unavailable. It compares MQTT payloads, not the Supervisor entity registry.
+For network isolation, fetch the locked dependencies first:
 
 ```sh
-unshare -Urn sh -c 'ip link set lo up && exec python3 scripts/verify-runtime.py "$1"' sh /path/to/govee
+unshare -Urn sh -c 'ip link set lo up && CARGO_NET_OFFLINE=true exec make runtime'
 ```
 
-Rust tests cover repeated HTTP 503/recovery transitions. The fixture and Rust
-tests do not replace physical or Supervisor acceptance.
+For an already built binary, `python3 scripts/verify-runtime.py <binary>` runs
+only the process checks. The proxy observes requests it receives, not all egress.
 
 For contributions, report the smallest reproducible case, then add a regression
 test at the affected layer where practical. Include the tested revision,
@@ -53,8 +53,8 @@ python3 scripts/check-store-source.py
 ```
 
 Review and commit the regenerated metadata with the change. Only metadata is
-generated, never a second source tree. The package version stays unchanged unless
-an explicitly approved release changes it. No exporter or fixed-HEAD export pin
+generated, never a second source tree. Keep the package version unchanged except
+when preparing a distinct candidate or an approved update. No exporter or fixed-HEAD export pin
 is needed; Git revisions plus content hashes record provenance.
 
 [Docker](DOCKER.md) and [add-on verification](ADDON-VERIFICATION.md) use the

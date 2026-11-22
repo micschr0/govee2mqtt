@@ -5,20 +5,37 @@ The Home Assistant package version comes from `govee2mqtt_security_local/config.
 the package inputs. The embedded build version comes from `SOURCE_TAG` in both
 Docker builds. The authoritative changelog is in the add-on directory.
 
-## Verify before asking for approval
+## Stable release gates
 
-1. Run `make verify` and `make runtime` in a disposable test environment.
-   Both commands honor `CARGO_TARGET_DIR`; runtime checks use local fixtures,
-   not real devices or cloud services.
-2. Complete [container and upgrade checks](ADDON-VERIFICATION.md) for the same
-   source revision. Keep amd64 and aarch64 results separate from the isolated
-   Supervisor upgrade.
+1. Run `make verify` and `make runtime` in a disposable test environment against
+   the same clean candidate commit. Both honor `CARGO_TARGET_DIR`; the runtime
+   checks use local fixtures, not real devices or cloud services.
+2. Record GitHub Rust, Store integrity, Security and Package verification runs
+   for that commit. Package verification builds both formats on amd64 and
+   arm64, checks image architecture and embedded CalVer, and does not push images.
+   The operator then runs the [same-ID Supervisor upgrade and restoration](qa/stable-supervisor-upgrade.md).
 3. Record [manual acceptance](qa/manual-acceptance.md) for an actual supported
    device, including an offline restart with cloud disabled. If shipping
    cloud opt-in, record LAN continuity with the opted-in cloud unreachable.
-4. Enable and verify the private reporting route in [SECURITY.md](../SECURITY.md).
+4. The operator enables and verifies the private reporting route in
+   [SECURITY.md](../SECURITY.md).
+
+A `stable/*` candidate branch can carry `stage: stable` for verification without
+changing the regular store. The stage flag is metadata, not approval. Keep the
+candidate version distinct from the regular store's current version. Changes to
+the tested candidate invalidate affected evidence; record the new revision and
+repeat the affected checks before approving it.
 
 ## After explicit maintainer approval
+
+### Regular Home Assistant store update
+
+The regular store repository URL follows `main`, not Git tags or GitHub
+Releases. Use an unused `YYYY.MM.DD` version and publish only the approved tree.
+Keep the URL and app slug unchanged. Record the published commit and package
+version, then reload the store and update the existing app without uninstalling.
+
+### Optional Git tag
 
 Use a clean checkout, an unused version and `git-cliff`. With `TAG_NAME` set to
 the approved version, `scripts/tag-release.sh` generates the changelog, updates

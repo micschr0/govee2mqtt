@@ -20,9 +20,7 @@ concurrency:
   cancel-in-progress: false
 
 # Default deny-all. Token for pushing commits/PRs comes from the GitHub App,
-# not from GITHUB_TOKEN. Läuft erst, wenn Michael die Secrets
-# RENOVATE_APP_ID + RENOVATE_PRIVATE_KEY angelegt hat (siehe docs/ci-cd.md),
-# oder wird zugunsten der gehosteten Renovate-App entfernt.
+# not from GITHUB_TOKEN. Requires the credentials documented in docs/ci-cd.md.
 permissions: {}
 
 jobs:
@@ -50,12 +48,12 @@ jobs:
           fi
 
       - if: steps.guard.outputs.ok == 'true'
-        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
         with:
           egress-policy: audit
 
       - if: steps.guard.outputs.ok == 'true'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         id: app-token
         with:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
@@ -73,9 +71,10 @@ jobs:
         with:
           persist-credentials: false
       - if: steps.guard.outputs.ok == 'true'
-        uses: renovatebot/github-action@1c0cf989c02653fba0efe7ca5772338860ca71dc # v46.3.12
+        uses: renovatebot/github-action@acdd6bda8b035c99ce59d5675816af2aa65a1774 # v46.3.14
         with:
           configurationFile: renovate.json
+          renovate-image: ghcr.io/renovatebot/renovate:44.257.9@sha256:d6b65ff3562dd499240b23d34ef806ec7e5fd2675e4236a027dfb36774f2aa75
           token: ${{ steps.app-token.outputs.token }}
         env:
           RENOVATE_REPOSITORIES: ${{ github.repository }}

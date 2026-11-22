@@ -20,6 +20,15 @@ import urllib.request
 IP = "127.0.0.1"
 ID = "00:00:00:00:00:00:00:01"
 CONFIG_TOPIC = "homeassistant/light/gv2mqtt-0000000000000001/config"
+DISCOVERY_IDENTITIES = {
+    "homeassistant/sensor/global-version/config": ("global-version", ["gv2mqtt"]),
+    "homeassistant/button/global-purge_caches/config": ("global-purge_caches", ["gv2mqtt"]),
+    "homeassistant/sensor/sensor-0000000000000001-gv2mqtt-status/config": (
+        "sensor-0000000000000001-gv2mqtt-status", ["gv2mqtt-0000000000000001"]),
+    "homeassistant/button/gv2mqtt-0000000000000001-request-platform-data/config": (
+        "gv2mqtt-0000000000000001-request-platform-data", ["gv2mqtt-0000000000000001"]),
+    CONFIG_TOPIC: ("gv2mqtt-0000000000000001", ["gv2mqtt-0000000000000001"]),
+}
 SECRET = "synthetic-cloud-key"
 TIMEOUT = 45
 ASSETS = Path(__file__).resolve().parents[1] / "govee2mqtt_security_local/local-source/assets"
@@ -144,13 +153,53 @@ def assert_http(pid, port):
           "bridge did not bind HTTP exclusively to the selected loopback address")
 
 
+def verify_occupied_http_port(binary):
+    with tempfile.TemporaryDirectory() as cwd, socket.create_server((IP, 0)) as reserved, \
+            socket.create_server((IP, 0)) as broker, tempfile.TemporaryFile() as logs:
+        bind = f"{IP}:{reserved.getsockname()[1]}"
+        env = {"GOVEE_MQTT_HOST": IP, "GOVEE_MQTT_PORT": str(broker.getsockname()[1]),
+               "GOVEE_HTTP_BIND": bind}
+        broker.settimeout(5)
+        with subprocess.Popen([binary, "serve", "--no-multicast"], cwd=cwd, env=env,
+                              stdout=logs, stderr=subprocess.STDOUT) as process:
+            try:
+                conn, _ = broker.accept()
+                with conn, conn.makefile("rb") as stream:
+                    conn.settimeout(5)
+                    check(receive(stream)[0] == 1, "HTTP conflict fixture did not see MQTT CONNECT")
+                    conn.sendall(b"\x20\x02\x00\x00")
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        pass  # The diagnostic matters, not the process exit policy.
+                    logs.seek(0)
+                    output = logs.read()
+                    check(f"run_http_server: binding to {bind}".encode() in output
+                          and b"Address already in use" in output,
+                          f"occupied HTTP port did not report the bind error: {output!r}")
+            finally:
+                if process.poll() is None:
+                    process.kill()
+
+
+def record_publish(packet, configs):
+    size = int.from_bytes(packet[:2], "big")
+    topic, payload = packet[2:2+size].decode(), packet[2+size:]
+    if topic.startswith("homeassistant/") and topic.endswith("/config"):
+        config = json.loads(payload)
+        check(configs.setdefault(topic, config) == config,
+              f"inconsistent discovery configuration for {topic}")
+    return topic, payload
+
+
 def exchange(conn, requests, *, brightness=42):
     conn.settimeout(TIMEOUT)
     with conn.makefile("rb") as stream:
         check(receive(stream)[0] == 1, "broker fixture did not see MQTT CONNECT")
         conn.sendall(b"\x20\x02\x00\x00")  # No existing MQTT session.
         missing = {b"homeassistant/status", b"gv2mqtt/light/+/command"}
-        config = None
+        configs = {}
+        online = False
         deadline = time.monotonic() + TIMEOUT
         while time.monotonic() < deadline:
             try:
@@ -168,13 +217,14 @@ def exchange(conn, requests, *, brightness=42):
             elif kind == 12:
                 conn.sendall(b"\xd0\x00")
             elif kind == 3:
-                size = int.from_bytes(packet[:2], "big")
-                if packet[2:2+size].decode() == CONFIG_TOPIC:
-                    config = json.loads(packet[2+size:])
-            if config is not None and not missing:
+                topic, payload = record_publish(packet, configs)
+                if topic == "gv2mqtt/availability" and payload == b"online":
+                    online = True
+            if online and CONFIG_TOPIC in configs and not missing:
                 break
         check(not missing, f"MQTT connection missing SUBSCRIBE for {sorted(missing)!r}")
-        check(config is not None, "light discovery config never arrived")
+        check(online and CONFIG_TOPIC in configs, "bridge did not announce the fixture light online")
+        config = configs[CONFIG_TOPIC]
         check(not config["effect"], "unexpected online scenes in fixture")
         for message, command in [
             ({"state": "OFF"}, {"cmd": "turn", "data": {"value": 0}}),
@@ -191,15 +241,17 @@ def exchange(conn, requests, *, brightness=42):
         while time.monotonic() < deadline:
             kind, packet = receive(stream)
             if kind == 3:
-                size = int.from_bytes(packet[:2], "big")
-                if packet[2:2+size].decode() == config["state_topic"]:
-                    state = json.loads(packet[2+size:])
+                topic, payload = record_publish(packet, configs)
+                if topic == config["state_topic"]:
+                    state = json.loads(payload)
                     if state.get("brightness") == brightness and state.get("color_temp") == 250:
                         break
         else:
             raise AssertionError("bridge did not publish the LAN fixture's updated status")
-        return (tuple(config["device"]["identifiers"]), config["unique_id"],
-                config["command_topic"], config["state_topic"])
+        identities = {topic: (config["unique_id"], config["device"]["identifiers"])
+                      for topic, config in configs.items()}
+        check(identities == DISCOVERY_IDENTITIES, f"unexpected MQTT discovery identities: {identities!r}")
+        return configs
 
 
 def bridge(binary, proxy_mode=None, http=False, blank_key=False, reconnect=False):
@@ -246,7 +298,7 @@ def bridge(binary, proxy_mode=None, http=False, blank_key=False, reconnect=False
                     with conn:
                         # A different brightness rules out pre-disconnect state as readback.
                         check(exchange(conn, requests, brightness=63) == identity,
-                              "MQTT identity changed after TCP reconnect")
+                               "MQTT discovery changed after TCP reconnect")
                         check(process.poll() is None, "bridge exited during MQTT reconnect")
                 if not proxy_mode:
                     check(cloud.empty(), "cloud request without opt-in")
@@ -379,15 +431,18 @@ def main():
                                  cwd=cwd, env={}, capture_output=True, timeout=5)
     check(invalid.returncode != 0 and b"not-an-address" in invalid.stderr,
           "invalid HTTP bind did not fail at startup")
+    verify_occupied_http_port(binary)
     verify_mqtt_tls(binary)
+    print("PASS: HTTP bind errors and MQTT TLS fixture")
     expected = bridge(binary, reconnect=True)
     for restart in range(3):
-        check(bridge(binary, blank_key=restart == 2) == expected, "MQTT identity changed after restart")
+        check(bridge(binary, blank_key=restart == 2, http=restart == 2) == expected,
+              "MQTT discovery changed after restart")
+    print("PASS: MQTT reconnect and five discovery configurations across three restarts")
     for failure in ["503", "disconnect"]:
-        check(bridge(binary, proxy_mode=failure) == expected, "MQTT identity changed on cloud failure")
-    check(bridge(binary, http=True) == expected, "MQTT identity changed on HTTP opt-in")
-    print("PASS: LAN commands/readback, MQTT TCP reconnect with fresh subscriptions and stable identity, "
-          "three bridge restarts, HTTP opt-in, "
+        check(bridge(binary, proxy_mode=failure) == expected, "MQTT discovery changed on cloud failure")
+    print("PASS: LAN commands/readback, MQTT TCP reconnect with fresh subscriptions, "
+          "five stable discovery configs across three bridge restarts, HTTP opt-in and port conflict, "
           "cloud 503 and disconnect, corrupt cache preserved, MQTT TLS without fallback")
 
 

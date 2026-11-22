@@ -1,21 +1,22 @@
 # Home Assistant add-on
 
-The fork provides the experimental `govee2mqtt_security_local` add-on for
-Home Assistant with Supervisor. Container/Core installations without Supervisor
-should use [Docker](DOCKER.md).
+The fork provides the `govee2mqtt_security_local` add-on for Home Assistant with
+Supervisor. Container/Core installations without Supervisor should use
+[Docker](DOCKER.md).
 
 ## Installation and configuration
 
 1. Set up an MQTT broker and the MQTT integration.
 2. Add `https://github.com/micschr0/govee2mqtt` as an add-on repository.
-3. Select the experimental Govee add-on and let Supervisor build it locally.
+3. Select the Govee to MQTT Bridge add-on and let Supervisor build it locally.
 4. Configure a reachable MQTT broker before first use. Govee credentials are optional for LAN devices.
 5. Enable LAN Control in the Govee app for each LAN device.
 6. Start the add-on manually to check its logs and devices in the MQTT integration.
 
-The repository URL follows its default branch, not an open pull request. To
-test an unreleased commit without changing an existing installation, use the
-[isolated Supervisor procedure](ADDON-VERIFICATION.md#isolated-supervisor-baseline-upgrade-and-reset).
+The repository URL follows its default branch, not a candidate branch or pull
+request. Update the existing app in place; do not uninstall it or change the
+repository URL. For unreleased candidates see the
+[operator upgrade procedure](qa/stable-supervisor-upgrade.md).
 
 HTTP and WebUI are disabled by default. Set `http_bind` only when needed;
 the enabled API has no authentication. See [configuration](CONFIG.md).

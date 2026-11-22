@@ -11,12 +11,20 @@
 Rust CI runs on application and add-on packaging changes, root Dockerfile and
 ignore rules, Makefile, scripts, tests and its workflow. Integrity CI checks the
 same package and exercises stale-input/version and persistence regressions.
-Cargo Audit also runs weekly. There is no automatic container release workflow.
+Cargo Audit also runs weekly. Pushes to `stable/*` run the release candidate
+checks on the pushed SHA without a pull request, tag or publishing workflow.
+Renovate is maintenance automation, not a candidate gate; do not dispatch it
+just to verify a candidate.
 
 ## Update rules
 
-- Rust toolchain and store builder are aligned on 1.99.1.
+- Rust toolchain and store builder are aligned on 1.100.0.
 - Actions are pinned to commit SHAs.
+- Both container recipes use Debian 13 (Trixie). Its main, updates and security
+  snapshots are pinned; APT verifies signatures and fails if any index is missing.
+- The primary `Cargo.lock` pins the application's complete dependency graph,
+  including the local SQLite patch. Its standalone upstream benches and
+  development-only dependencies are not built by the application.
 - Renovate owns Cargo and GitHub Actions version updates; automerge is disabled.
 - Update Docker base images and the pinned Rust toolchain manually.
 - After reviewing a Cargo update, regenerate add-on metadata before rerunning CI.

@@ -14,7 +14,8 @@ over your LAN; opt into Govee cloud features only if you need them.
 - Locally built Home Assistant add-on with pinned build dependencies and checksums.
 
 Available functions depend on the device model and Govee APIs. BLE-only devices
-are unsupported. The HTTP API has no authentication when enabled.
+and independent control of the H60C1 zones are unsupported. The HTTP API has no
+authentication when enabled.
 
 ## Setup
 
@@ -35,8 +36,8 @@ are unsupported. The HTTP API has no authentication when enabled.
 | Security reporting and acceptance | [Report privately](SECURITY.md), [acceptance status](docs/security/README.md) |
 | Releases and rollback | [Release procedure](docs/RELEASE.md) |
 
-The store package remains experimental. Local checks do not replace full
-acceptance testing with Home Assistant, MQTT and real devices.
+Automated checks do not replace acceptance testing with Home Assistant, MQTT
+and real devices. See the [stable release gates](docs/RELEASE.md).
 
 ## Credits and license
 

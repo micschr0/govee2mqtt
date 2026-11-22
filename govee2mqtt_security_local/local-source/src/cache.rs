@@ -513,6 +513,16 @@ mod sqlite_compatibility_tests {
         assert_eq!(result, "fixture");
         drop(cache);
 
+        let empty_path = TestCachePath::new();
+        std::fs::File::create(&empty_path.0).unwrap();
+        let empty_cache = open_cache(&empty_path.0).unwrap();
+        let result = cache_get_from(&empty_cache, options, async {
+            Ok(CacheComputeResult::Value("empty file refresh".to_string()))
+        })
+        .await
+        .unwrap();
+        assert_eq!(result, "empty file refresh");
+
         let cache = open_cache(&path.0).unwrap();
         let result: String = cache_get_from(&cache, options, async { panic!("cache miss") })
             .await

@@ -1,14 +1,18 @@
 # Build the authoritative sources inside the Home Assistant context.
 # No published govee image and no precompiled host binary are inputs.
 ARG BUILD_ARCH
-FROM ghcr.io/home-assistant/amd64-base-debian:bookworm@sha256:2ac5052621ce75d8af64e07a1c7fe2315c763b21fcd9bbe6843455b3a09ea001 AS runtime-amd64
-FROM ghcr.io/home-assistant/aarch64-base-debian:bookworm@sha256:d4b28f55cbd80f6547f95c288cec6106fc7642894905f71928627ee92acf16d0 AS runtime-aarch64
+FROM ghcr.io/home-assistant/amd64-base-debian:trixie@sha256:a2a09d3983b771953c53a3a8c871f2c1d6d28bcf0ebaab09bc0eb80ffa5f4041 AS runtime-amd64
+FROM ghcr.io/home-assistant/aarch64-base-debian:trixie@sha256:3f64e58a4169792bdb28ae0a587cc26030a242e95ac3b76fe8f35a28fee7072d AS runtime-aarch64
 
 # Runs on TARGET platform: native builder or already configured QEMU.
-FROM rust:1.99.1-bookworm@sha256:e6f2cff35d0f309acf8433b4f05878ed77092602c5065cc81801177da0bb3a9c AS source-builder
+FROM rust:1.100.0-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8 AS source-builder
 RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
-    && printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261107T000000Z bookworm main' > /etc/apt/sources.list \
-    && apt-get update \
+    && printf '%s\n' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261122T000000Z trixie main' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261122T000000Z trixie-updates main' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261122T000000Z trixie-security main' \
+        > /etc/apt/sources.list \
+    && apt-get -o APT::Update::Error-Mode=any update \
     && apt-get install -y --no-install-recommends cmake pkg-config \
     && rm -rf /var/lib/apt/lists/*
 ARG CARGO_PROFILE=verification
@@ -24,9 +28,13 @@ FROM runtime-${BUILD_ARCH}
 ARG BUILD_ARCH
 ARG BUILD_VERSION
 RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
-    && printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261107T000000Z bookworm main' > /etc/apt/sources.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libstdc++6 libssl3 \
+    && printf '%s\n' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261122T000000Z trixie main' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261122T000000Z trixie-updates main' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261122T000000Z trixie-security main' \
+        > /etc/apt/sources.list \
+    && apt-get -o APT::Update::Error-Mode=any update \
+    && apt-get install -y --no-install-recommends ca-certificates libstdc++6 libssl3t64 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=source-builder /context/govee /app/govee

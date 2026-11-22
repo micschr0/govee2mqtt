@@ -23,7 +23,9 @@ verify: fmt clippy test build integrity
 	python3 -m unittest discover -s tests -v
 
 runtime: build
-	cd $(SOURCE_DIR) && python3 ../../scripts/verify-runtime.py "$${CARGO_TARGET_DIR:-target}/debug/govee"
+	timeout 30s python3 -m unittest discover -s tests -p test_launcher.py -v
+	cd $(SOURCE_DIR) && $(CARGO) test --locked platform_inventory_recovers_without_replacing_local_identity
+	cd $(SOURCE_DIR) && timeout --kill-after=5s 6m python3 -u ../../scripts/verify-runtime.py "$${CARGO_TARGET_DIR:-target}/debug/govee"
 
 docker:
 	python3 scripts/check-store-source.py

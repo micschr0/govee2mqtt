@@ -3,7 +3,7 @@ name: rust
 on:
   # Development and both container contexts share these sources.
   push:
-    branches: [main]
+    branches: [main, 'stable/*']
     paths:
       - 'govee2mqtt_security_local/**'
       - 'Dockerfile'
@@ -35,19 +35,15 @@ jobs:
     name: fmt, clippy, test, build
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    defaults:
-      run:
-        # The sole application source tree.
-        working-directory: govee2mqtt_security_local/local-source
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install Rust toolchain
         # Keep CI aligned with the explicitly pinned store build toolchain.
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
         with:
-          toolchain: '1.99.1'
+          toolchain: '1.100.0'
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -55,37 +51,26 @@ jobs:
           workspaces: govee2mqtt_security_local/local-source
           cache-on-failure: true
 
-      - name: Format
-        run: cargo fmt --all -- --check
-
-      - name: Clippy
-        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Verify source, tests and package
+        run: make verify
 
       - name: Docs
+        working-directory: govee2mqtt_security_local/local-source
         run: cargo doc --locked --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
 
-      - name: Test
-        run: cargo test --locked
-
-      - name: Test packaging and release scripts
-        working-directory: .
-        run: python3 -m unittest discover -s tests -v
-
-      - name: Build
-        run: cargo build --locked
-
       - name: Fixture runtime checks
-        timeout-minutes: 5
-        run: python3 ../../scripts/verify-runtime.py target/debug/govee
+        timeout-minutes: 8
+        run: make runtime
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
         with:
-          tool: cargo-llvm-cov
+          tool: cargo-llvm-cov@0.9.2
 
       - name: Generate coverage and publish summary
+        working-directory: govee2mqtt_security_local/local-source
         run: |
           cargo llvm-cov --locked
           cargo llvm-cov report > "$RUNNER_TEMP/coverage-summary.txt"

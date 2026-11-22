@@ -4,6 +4,10 @@ Issue #2 delivers this procedure and offline fixture checks. It does not establi
 migration acceptance. Issue #1 owns successful candidate packaging on **both**
 amd64 and aarch64 and an actual isolated Home Assistant (HA) upgrade.
 
+For a stable release, the [operator procedure](qa/stable-supervisor-upgrade.md)
+is required. The local-app rehearsal below uses a different full app ID and
+cannot establish continuity for users of the regular store URL.
+
 ## Inputs and evidence
 
 Use Linux, Python 3.9+, GNU `timeout`, Docker Engine and Buildx/BuildKit.
@@ -82,15 +86,18 @@ ARG SNAPSHOT_URL
 WORKDIR /probe
 COPY local-source/ ./
 RUN test -x /bin/sh
-RUN curl --fail --max-time 20 "${SNAPSHOT_URL}/dists/bookworm/Release" -o /tmp/Release \
+ARG DEBIAN_SUITE
+RUN curl --fail --max-time 20 "${SNAPSHOT_URL}/dists/${DEBIAN_SUITE}/Release" -o /tmp/Release \
     && cargo metadata --locked --format-version 1 > /tmp/metadata.json
 DOCKER
 timeout 60 docker buildx build --builder "$BUILDER" --platform "$PLATFORM" \
   --build-arg "RUST_BASE=$RUST_BASE" --build-arg "SNAPSHOT_URL=$SNAPSHOT_URL" \
+  --build-arg "DEBIAN_SUITE=$DEBIAN_SUITE" \
   --file "$RUN_DIR/readiness.Dockerfile" "$CANDIDATE_PACKAGE"
 ```
 
 Repeat for both platforms and any baseline with different pinned inputs.
+Set `DEBIAN_SUITE` to the suite used in the matching Dockerfile.
 The builder's build network must be provisioned in private configuration.
 Keep probe logs private. A manifest
 inspection alone does not prove target execution or working build mounts.

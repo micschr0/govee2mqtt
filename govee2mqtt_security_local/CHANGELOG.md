@@ -1,5 +1,14 @@
 # Changes
 
+## 2026.11.23
+
+- Use Rust 1.100.0, updated direct dependencies and pinned Debian 13 build and
+  runtime images for amd64 and aarch64.
+- Keep the existing store entry, options, data paths and MQTT discovery IDs.
+- Verify LAN startup and control with synthetic fixtures, including unreachable
+  opted-in cloud, MQTT reconnect and HTTP bind errors.
+- Independent H60C1 zones are not supported.
+
 ## 2026.11.22 — Home Assistant test package
 
 - Build Docker and Home Assistant packages from one application source tree.

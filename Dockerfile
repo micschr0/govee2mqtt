@@ -1,8 +1,12 @@
 # Ordinary builds compile the same authoritative add-on sources.
-FROM rust:1.99.1-bookworm@sha256:e6f2cff35d0f309acf8433b4f05878ed77092602c5065cc81801177da0bb3a9c AS source-builder
+FROM rust:1.100.0-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8 AS source-builder
 RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
-    && printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261107T000000Z bookworm main' > /etc/apt/sources.list \
-    && apt-get update \
+    && printf '%s\n' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261122T000000Z trixie main' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261122T000000Z trixie-updates main' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261122T000000Z trixie-security main' \
+        > /etc/apt/sources.list \
+    && apt-get -o APT::Update::Error-Mode=any update \
     && apt-get install -y --no-install-recommends cmake pkg-config \
     && rm -rf /var/lib/apt/lists/*
 ARG CARGO_PROFILE=verification
@@ -16,7 +20,7 @@ RUN GOVEE_CI_TAG="$(cat ../SOURCE_TAG)" cargo build --locked --profile "$CARGO_P
 
 RUN useradd --uid 1000 --no-create-home --shell /usr/sbin/nologin govee && mkdir /data
 
-FROM gcr.io/distroless/cc-debian12:latest@sha256:e5d81ddde149641e2a9ba55be4545bc125c67de07508b03ba4c22e6eb0ded5aa
+FROM gcr.io/distroless/cc-debian13:latest@sha256:809d04afa1be033c441f76bb0051878c342fb76d0ea236bc6dc94b655fa0fbd6
 
 # Import from builder.
 COPY --from=source-builder /etc/passwd /etc/passwd

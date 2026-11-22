@@ -1,6 +1,8 @@
 name: Package verification
 
 on:
+  push:
+    branches: ['stable/*']
   pull_request:
     branches: [main]
     paths:

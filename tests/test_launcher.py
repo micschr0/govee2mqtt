@@ -8,9 +8,13 @@ import unittest
 LAUNCHER = Path(__file__).resolve().parents[1] / "govee2mqtt_security_local/run.sh"
 STUB = """
 bashio::config.has_value() { [[ -n "${!1}" ]]; }
-bashio::config() { printf '%s' "${!1}"; }
+bashio::config() {
+    [[ "$1" != "${fail_option:-}" ]] || return 1
+    printf '%s' "${!1}"
+}
 bashio::services.available() { [[ "$broker" = available ]]; }
 bashio::services() {
+    [[ "$2" != "${fail_service:-}" ]] || return 1
     case "$2" in
         host) printf 'broker.fixture';;
         port) printf '2883';;
@@ -103,3 +107,21 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(env, {})
         self.assertIn("Mosquitto MQTT broker is not available", result.stderr)
+
+    def test_failed_option_read_stops_without_leaking_credentials(self):
+        result, env = self.launch(
+            mqtt_host="mqtt.fixture", mqtt_password="mqtt-secret",
+            govee_password="cloud-secret", fail_option="govee_password",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(env, {})
+        self.assertIn("Cannot read add-on option govee_password", result.stderr)
+        self.assertNotIn("mqtt-secret", result.stdout + result.stderr)
+        self.assertNotIn("cloud-secret", result.stdout + result.stderr)
+
+    def test_failed_supervisor_credentials_stop_before_starting_bridge(self):
+        result, env = self.launch(broker="available", fail_service="password")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(env, {})
+        self.assertIn("Cannot read the MQTT service configuration", result.stderr)
+        self.assertNotIn("supervisor-secret", result.stdout + result.stderr)

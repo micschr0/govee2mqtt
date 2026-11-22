@@ -7,7 +7,7 @@ name: Store integrity
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'stable/*']
     paths:
       - "govee2mqtt_security_local/**"
       - ".github/workflows/store-integrity.yml"

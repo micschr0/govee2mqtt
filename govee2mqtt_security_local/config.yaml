@@ -1,8 +1,8 @@
-name: Govee to MQTT Bridge (local security development)
-version: "2026.11.22"
+name: Govee to MQTT Bridge
+version: "2026.11.23"
 slug: govee2mqtt_security_local
-description: Local source build; security acceptance pending
-stage: experimental
+description: Local-first Govee control and Home Assistant MQTT discovery
+stage: stable
 boot: auto
 url: https://github.com/micschr0/govee2mqtt
 arch:
