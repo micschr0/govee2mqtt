@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 
-SCRIPT = Path(__file__).with_name("h60c1-acceptance.py")
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "h60c1-acceptance.py"
 
 
 def run_cli(mode, value, *args):
@@ -214,6 +214,15 @@ class AcceptanceCLI(unittest.TestCase):
         ])
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(result.stdout, "")
+
+    def test_verify_rejects_non_json_numeric_constants(self):
+        for constant in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(constant=constant):
+                datagram = (f'{{"msg":{{"cmd":"ptReal","data":{{"command":["{FRAME_A}"],'
+                            f'"unknown":{constant}}}}}}}').encode().hex()
+                result = verify_capture(manifest(), [f"1\t4002\t4003\t{datagram}\n"])
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(result.stdout, "")
 
 
 if __name__ == "__main__":
