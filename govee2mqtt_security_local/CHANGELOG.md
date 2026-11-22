@@ -1,5 +1,11 @@
 # Changes
 
+## 2026.11.26
+
+- Add LAN RGB controls for the three logical H60C1 segments and a batched
+  MQTT command. Dedicated white and device-reported segment state remain
+  unsupported.
+
 ## 2026.11.25
 
 - Refresh the Store package version. Application behavior is unchanged.

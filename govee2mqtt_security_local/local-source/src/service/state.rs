@@ -1,5 +1,5 @@
 use crate::ble::{Base64HexBytes, SetHumidifierMode, SetHumidifierNightlightParams};
-use crate::lan_api::{Client as LanClient, DeviceStatus as LanDeviceStatus, LanDevice};
+use crate::lan_api::{Client as LanClient, DeviceStatus as LanDeviceStatus, LanDevice, SegmentRgb};
 use crate::platform_api::{DeviceCapability, DeviceType, GoveeApiClient};
 use crate::service::coordinator::Coordinator;
 use crate::service::device::Device;
@@ -12,7 +12,7 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard, Notify, Semaphore};
+use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard, Notify, OwnedSemaphorePermit, Semaphore};
 use tokio::time::{sleep, Duration};
 
 #[derive(Default)]
@@ -99,6 +99,24 @@ impl State {
         self: &Arc<Self>,
         label: &str,
     ) -> anyhow::Result<Coordinator> {
+        let (device, permit) = self.lock_device_for_control(label).await?;
+        let device_id = device.id.clone();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        // Reconcile the device's state after the Coordinator is dropped.
+        let state = self.clone();
+        tokio::spawn(async move {
+            let _ = rx.await;
+            state.poll_after_control(device_id).await
+        });
+
+        Ok(Coordinator::new(device, permit, tx))
+    }
+
+    async fn lock_device_for_control(
+        &self,
+        label: &str,
+    ) -> anyhow::Result<(Device, OwnedSemaphorePermit)> {
         let device = self
             .resolve_device(label)
             .await
@@ -110,18 +128,21 @@ impl State {
             .device_by_id(&device_id)
             .await
             .with_context(|| format!("device '{device_id}' not found"))?;
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        Ok((device, permit))
+    }
 
-        // Schedule a task that will poll the device a short
-        // time after the Coordinator is dropped, to reconcile
-        // any changed state
-        let state = self.clone();
-        tokio::spawn(async move {
-            let _ = rx.await;
-            state.poll_after_control(device_id).await
-        });
-
-        Ok(Coordinator::new(device, permit, tx))
+    pub async fn device_set_lan_segment_rgb(
+        &self,
+        label: &str,
+        updates: &[SegmentRgb],
+    ) -> anyhow::Result<()> {
+        let (device, _permit) = self.lock_device_for_control(label).await?;
+        // Whole-device status cannot verify segment colors.
+        device
+            .lan_rgb_segment_device()
+            .context("LAN RGB segment control requires an IPv4 H60C1 discovered on LAN")?
+            .send_segment_rgb(updates)
+            .await
     }
 
     /// Resolve a device using its name, computed name, id or label,

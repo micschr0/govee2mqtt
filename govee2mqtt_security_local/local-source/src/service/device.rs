@@ -174,6 +174,12 @@ impl Device {
         self.lan_device.as_ref().map(|device| device.ip)
     }
 
+    pub fn lan_rgb_segment_device(&self) -> Option<&LanDevice> {
+        self.lan_device
+            .as_ref()
+            .filter(|device| device.supports_segment_rgb())
+    }
+
     pub fn set_last_polled(&mut self) {
         self.last_polled.replace(Utc::now());
     }

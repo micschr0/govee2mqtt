@@ -17,6 +17,8 @@ Remove stale MQTT devices and rediscover them only if needed.
 Govee's segment API exposes color and brightness but no separate power state.
 Home Assistant still shows a switch. Support for brightness 0 and independent
 segment brightness also depends on the device.
+The [H60C1 LAN segment path](LAN.md#h60c1-rgb-segments) sends only RGB; use
+the whole-lamp entity for power and brightness.
 
 ## Video effects are missing
 

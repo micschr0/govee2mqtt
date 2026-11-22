@@ -7,6 +7,7 @@ over your LAN; opt into Govee cloud features only if you need them.
 ## Features and fork improvements
 
 - LAN control for supported models without a Govee account or API key in the bridge.
+- [H60C1 RGB segment control over LAN](docs/LAN.md#h60c1-rgb-segments).
 - Optional Govee Platform API for additional device functions, effects and segments.
 - Optional Govee account for IoT status updates, rooms and Tap-to-Run scenes.
 - HTTP API and WebUI disabled by default; require an explicit bind address.
@@ -14,8 +15,8 @@ over your LAN; opt into Govee cloud features only if you need them.
 - Locally built Home Assistant add-on with pinned build dependencies and checksums.
 
 Available functions depend on the device model and Govee APIs. BLE-only devices
-and independent control of the H60C1 zones are unsupported. The HTTP API has no
-authentication when enabled.
+are unsupported. H60C1 RGB segments do not control the dedicated white channel.
+The HTTP API has no authentication when enabled.
 
 ## Setup
 

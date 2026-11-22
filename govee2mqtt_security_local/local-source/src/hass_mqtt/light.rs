@@ -132,9 +132,15 @@ impl DeviceLight {
     ) -> anyhow::Result<Self> {
         let quirk = device.resolve_quirk();
         let device_type = device.device_type();
+        let lan_rgb_segment = segment.is_some() && device.lan_rgb_segment_device().is_some();
 
         let command_topic = match segment {
             None => format!("gv2mqtt/light/{id}/command", id = topic_safe_id(device)),
+            Some(seg) if lan_rgb_segment => format!(
+                "gv2mqtt/light/{id}/segments/{number}/command",
+                id = topic_safe_id(device),
+                number = seg + 1,
+            ),
             Some(seg) => format!(
                 "gv2mqtt/light/{id}/command/{seg}",
                 id = topic_safe_id(device)
@@ -188,16 +194,13 @@ impl DeviceLight {
             (None, None)
         };
 
-        let brightness = segment.is_some()
-            || quirk
-                .as_ref()
-                .map(|q| q.supports_brightness)
-                .unwrap_or(false)
-            || device
-                .http_device_info
-                .as_ref()
-                .map(|info| info.supports_brightness())
-                .unwrap_or(false);
+        let brightness = !lan_rgb_segment
+            && (segment.is_some()
+                || quirk.as_ref().is_some_and(|q| q.supports_brightness)
+                || device
+                    .http_device_info
+                    .as_ref()
+                    .is_some_and(|info| info.supports_brightness()));
 
         let name = match segment {
             Some(n) => Some(format!("Segment {:03}", n + 1)),
@@ -240,11 +243,12 @@ impl DeviceLight {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hass_mqtt::enumerator::enumerate_entities_for_device;
+    use crate::hass_mqtt::instance::EntityList;
     use crate::service::hass::mired_to_kelvin;
 
-    #[tokio::test]
-    async fn h60c1_discovery_uses_safe_temperature_endpoints() {
-        let mut device = ServiceDevice::new("H60C1", "00:00:00:00:00:00:00:01");
+    fn lan_light(sku: &str) -> ServiceDevice {
+        let mut device = ServiceDevice::new(sku, "00:00:00:00:00:00:00:01");
         device.lan_device = Some(crate::lan_api::LanDevice {
             ip: "127.0.0.1".parse().unwrap(),
             device: device.id.clone(),
@@ -254,6 +258,12 @@ mod tests {
             wifi_version_hard: String::new(),
             wifi_version_soft: String::new(),
         });
+        device
+    }
+
+    #[tokio::test]
+    async fn h60c1_discovery_uses_safe_temperature_endpoints() {
+        let device = lan_light("H60C1");
         assert_eq!(device.get_color_temperature_range(), Some((2700, 6500)));
 
         let light = DeviceLight::for_device(&device, &StateHandle::default(), None)
@@ -268,5 +278,45 @@ mod tests {
             .contains(&json!("color_temp")));
         assert!((2700..=6500).contains(&mired_to_kelvin(154)));
         assert!((2700..=6500).contains(&mired_to_kelvin(370)));
+    }
+
+    #[tokio::test]
+    async fn h60c1_segment_controls_need_no_cloud_and_have_no_readback() {
+        let state = StateHandle::default();
+        let device = lan_light("H60C1");
+        let mut entities = EntityList::new();
+        enumerate_entities_for_device(&device, &state, &mut entities)
+            .await
+            .unwrap();
+        assert_eq!(entities.len(), 6); // Diagnostic, refresh, whole light, three RGB segments.
+
+        let segment = DeviceLight::for_device(&device, &state, Some(1))
+            .await
+            .unwrap();
+        let config = serde_json::to_value(&segment.light).unwrap();
+        assert_eq!(
+            config["command_topic"],
+            "gv2mqtt/light/0000000000000001/segments/2/command"
+        );
+        assert_eq!(config["unique_id"], "gv2mqtt-0000000000000001-1");
+        assert_eq!(config["supported_color_modes"], json!(["rgb"]));
+        assert_eq!(config["brightness"], false);
+        assert_eq!(config["optimistic"], true);
+
+        let other = lan_light("H60B0");
+        let mut entities = EntityList::new();
+        enumerate_entities_for_device(&other, &state, &mut entities)
+            .await
+            .unwrap();
+        assert_eq!(entities.len(), 3);
+        let legacy = DeviceLight::for_device(&other, &state, Some(1))
+            .await
+            .unwrap();
+        let config = serde_json::to_value(&legacy.light).unwrap();
+        assert_eq!(
+            config["command_topic"],
+            "gv2mqtt/light/0000000000000001/command/1"
+        );
+        assert_eq!(config["brightness"], true);
     }
 }

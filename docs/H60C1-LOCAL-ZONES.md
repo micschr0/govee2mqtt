@@ -3,8 +3,10 @@
 Research for [#3](https://github.com/micschr0/govee2mqtt/issues/3), reviewed
 2026-11-11. Hardware execution and physical acceptance belong to
 [#10](https://github.com/micschr0/govee2mqtt/issues/10).
+The later [owner RGB observation](qa/H60C1-RGB-OWNER-OBSERVATION.md) adds
+evidence for bundled RGB, not for dedicated white or independent zone changes.
 
-## Conclusion: inconclusive
+## Original conclusion (2026-11-11): inconclusive
 
 No H60C1 firmware 1.01.27 command capture or physical test result is available
 in this investigation. Independent bottom dedicated-white and side RGB control
@@ -17,7 +19,7 @@ owner's hardware/captures, an agreed supervised window and explicit physical
 observations. No lamp discovery, control or network-isolation operation was
 performed for this report.
 
-## Evidence inventory
+## Original evidence inventory
 
 **Reported** means supplied by the owner in #3; **vendor** means product
 literature; **code** means inspected source; **other model** means a project's

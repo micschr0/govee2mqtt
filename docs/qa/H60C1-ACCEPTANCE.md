@@ -1,10 +1,10 @@
 # H60C1 owner acceptance kit
 
 Preparation for [#10](https://github.com/micschr0/govee2mqtt/issues/10), using
-[#3's inventory and protocol](../H60C1-LOCAL-ZONES.md). Research remains
-**inconclusive**. No H60C1 command bytes, owner-supervised window or physical
-observations have been supplied. This is portable tooling and a blank handoff,
-not an execution report. Mandatory hardware checks remain pending.
+[#3's inventory and protocol](../H60C1-LOCAL-ZONES.md). The
+[owner's bundled RGB trial](H60C1-RGB-OWNER-OBSERVATION.md) confirms three RGB
+segments on firmware `1.01.27`. Dedicated white, independent single-segment
+changes and the rest of #10's physical checks remain pending.
 
 ## What the evidence supports
 
@@ -21,7 +21,7 @@ not an execution report. Mandatory hardware checks remain pending.
   [2700–6500 K discovery correction on `main`][temperature-fix] is separate
   and unchanged by this kit. Neither proves dedicated white or side RGB.
 
-**Next evidence to collect:** in an agreed window, capture one H60C1 zone-only
+**If hardware acceptance resumes:** in an agreed window, capture one H60C1 zone-only
 change twice and note the exact settings, times and visible effects on all
 zones. Prefer LAN if the controller can already make that change. A
 whole-device `colorwc` packet is a useful capture sanity check, not a zone
@@ -213,6 +213,7 @@ unexecuted checks pending; reserve `inconclusive` for an observed result.
 
 | Capability | Evidence so far | Owner confirmation / evidence IDs |
 | --- | --- | --- |
+| Three simultaneous RGB colors in one LAN write | Owner observed red, green and blue after one three-frame `ptReal` datagram on 1.01.27 | [Owner report](H60C1-RGB-OWNER-OBSERVATION.md); single-segment isolation pending |
 | Simultaneous dedicated bottom white + side RGB; emitter identity | Manufacturer lists zones; no H60C1 LAN or emitter observation | Pending, step 4 |
 | Bottom temperature independent of side | Whole-device temperature documented; no H60C1 zone packet | Pending, step 5 |
 | Bottom brightness independent of side | Whole-device brightness documented; no H60C1 zone packet | Pending, step 5 |

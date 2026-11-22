@@ -10,6 +10,7 @@ use crate::hass_mqtt::select::{SceneModeSelect, WorkModeSelect};
 use crate::hass_mqtt::sensor::{CapabilitySensor, DeviceStatusDiagnostic, GlobalFixedDiagnostic};
 use crate::hass_mqtt::switch::CapabilitySwitch;
 use crate::hass_mqtt::work_mode::ParsedWorkMode;
+use crate::lan_api::H60C1_RGB_SEGMENTS;
 use crate::platform_api::{DeviceCapability, DeviceCapabilityKind, DeviceType};
 use crate::service::device::Device as ServiceDevice;
 use crate::service::hass::{availability_topic, oneclick_topic, purge_cache_topic};
@@ -196,11 +197,18 @@ pub async fn enumerate_entities_for_device(
                 }
             }
         }
+    }
 
-        if let Some(segments) = info.supports_segmented_rgb() {
-            for n in segments {
-                entities.add(DeviceLight::for_device(d, state, Some(n)).await?);
-            }
+    let segments = if d.lan_rgb_segment_device().is_some() {
+        Some(0..H60C1_RGB_SEGMENTS)
+    } else {
+        d.http_device_info
+            .as_ref()
+            .and_then(|info| info.supports_segmented_rgb())
+    };
+    if let Some(segments) = segments {
+        for n in segments {
+            entities.add(DeviceLight::for_device(d, state, Some(n)).await?);
         }
     }
     Ok(())

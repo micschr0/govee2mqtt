@@ -4,7 +4,7 @@ use crate::hass_mqtt::humidifier::{mqtt_device_set_work_mode, mqtt_humidifier_se
 use crate::hass_mqtt::instance::EntityList;
 use crate::hass_mqtt::number::mqtt_number_command;
 use crate::hass_mqtt::select::mqtt_set_mode_scene;
-use crate::lan_api::DeviceColor;
+use crate::lan_api::{DeviceColor, SegmentRgb};
 use crate::opt_env_var;
 use crate::platform_api::{from_json, DeviceType};
 use crate::service::device::Device as ServiceDevice;
@@ -410,6 +410,31 @@ async fn mqtt_light_segment_command(
     Ok(())
 }
 
+async fn mqtt_light_lan_segment_command(
+    Payload(payload): Payload<String>,
+    Params(IdAndSeg { id, segment }): Params<IdAndSeg>,
+    State(state): State<StateHandle>,
+) -> anyhow::Result<()> {
+    let command: HassLightCommand = serde_json::from_str(&payload)?;
+    let Some(color) = command.color.filter(|_| command.state == "ON") else {
+        return Ok(());
+    };
+    let update = SegmentRgb {
+        segment: segment.parse()?,
+        color,
+    };
+    state.device_set_lan_segment_rgb(&id, &[update]).await
+}
+
+async fn mqtt_light_lan_segments_command(
+    Payload(payload): Payload<String>,
+    Params(IdParameter { id }): Params<IdParameter>,
+    State(state): State<StateHandle>,
+) -> anyhow::Result<()> {
+    let updates: Vec<SegmentRgb> = serde_json::from_str(&payload)?;
+    state.device_set_lan_segment_rgb(&id, &updates).await
+}
+
 async fn mqtt_purge_caches(State(state): State<StateHandle>) -> anyhow::Result<()> {
     log::info!("mqtt_purge_caches");
     crate::cache::purge_cache()?;
@@ -537,6 +562,18 @@ async fn run_mqtt_loop(
             )
             .await?;
         router
+            .route(
+                "gv2mqtt/light/:id/segments/command",
+                mqtt_light_lan_segments_command,
+            )
+            .await?;
+        router
+            .route(
+                "gv2mqtt/light/:id/segments/:segment/command",
+                mqtt_light_lan_segment_command,
+            )
+            .await?;
+        router
             .route("gv2mqtt/switch/:id/command/:instance", mqtt_switch_command)
             .await?;
 
@@ -607,6 +644,15 @@ async fn run_mqtt_loop(
     while let Ok(event) = subscriber.recv().await {
         match event {
             Event::Message(msg) => {
+                if msg.retain
+                    && msg
+                        .topic
+                        .strip_prefix("gv2mqtt/light/")
+                        .and_then(|topic| topic.split('/').nth(1))
+                        == Some("segments")
+                {
+                    continue;
+                }
                 let router = router.clone();
                 let state = state.clone();
                 tokio::spawn(async move {
