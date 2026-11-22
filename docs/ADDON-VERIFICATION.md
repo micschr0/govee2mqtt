@@ -241,6 +241,13 @@ throughout an upgrade.
    the saved baseline with
    `python3 scripts/verify-addon-fixtures.py after --baseline before`. Expect no option or marker loss,
    correct mount destinations, HTTP still off, MQTT connected and no new errors.
+   For the autostart candidate, check the Supervisor startup switch after the
+   update: a saved user setting takes precedence over the new default. Enable it
+   if necessary, reboot the entire disposable HA host, and confirm the add-on
+   starts automatically and connects to MQTT. If possible, disable the switch,
+   reboot the host again and confirm the add-on does not start automatically.
+   Record switch state and each result; Docker and fixture tests cannot prove
+   Supervisor autostart.
 9. Save command exits, versions, architecture and redacted results. Record
    packaging and live upgrade independently as pass/fail/pending. A failure stays
    failed even if readiness passed. #1 may claim upgrade acceptance only after
@@ -250,6 +257,10 @@ throughout an upgrade.
     package directory using the owner's test access). Remove only identified
     run-owned images/directories after evidence is retained. Never prune shared
     Docker state. Restore baseline before testing the next candidate.
+
+With no isolated HA target, the update, switch and host-reboot checks remain
+pending. A regular store update for existing installations requires a separately
+approved version step; see [release and rollback](RELEASE.md).
 
 Reference semantics: [HA testing](https://contributors.home-assistant.io/apps/guides/testing/),
 [HA configuration/mounts](https://contributors.home-assistant.io/apps/reference/configuration/),

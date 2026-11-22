@@ -1,8 +1,8 @@
 # In-context source build
 
 Add `https://github.com/micschr0/govee2mqtt` as a Supervisor add-on repository.
-Select this experimental add-on, configure an isolated or appropriate MQTT broker,
-and start it manually. Enable LAN Control on LAN devices. Govee account/API
+Select this experimental add-on and configure a reachable MQTT broker before first
+use. Start it manually to check logs and MQTT devices. Enable LAN Control on LAN devices. Govee account/API
 credentials are optional. HTTP/WebUI stay disabled without `http_bind`; an enabled
 API has no authentication. AppArmor and host networking remain enabled.
 
@@ -20,7 +20,10 @@ From the repository root, refresh generated metadata after source or package edi
 
 The slug and version are preserved. Supervisor `/data` options and the writable
 `addon_config` mount at `/app/config` retain their existing meanings; do not delete
-or recreate them during an upgrade. Startup remains manual.
+or recreate them during an upgrade. Automatic startup is enabled by default and
+can be disabled in Supervisor. A previously saved startup setting takes precedence;
+check the switch after updating. The launcher waits briefly for the
+Supervisor-provided MQTT broker; an explicit `mqtt_host` uses that configuration.
 
 - [Configuration](../docs/CONFIG.md)
 - [Development](../docs/DEVELOPMENT.md)
