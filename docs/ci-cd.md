@@ -25,6 +25,11 @@ just to verify a candidate.
 - The primary `Cargo.lock` pins the application's complete dependency graph,
   including the local SQLite patch. Its standalone upstream benches and
   development-only dependencies are not built by the application.
+- `chrono` 0.4.45 and `chrono-tz` 0.10.4 are at their latest stable releases.
+  Cargo Audit reports them as unmaintained (RUSTSEC-2026-0543 and
+  RUSTSEC-2026-0555); there is no fixed version. Replacing the date/time APIs
+  with a different library and testing persisted data compatibility is separate
+  from a dependency update. The audit warnings remain visible.
 - Renovate owns Cargo and GitHub Actions version updates; automerge is disabled.
 - Update Docker base images and the pinned Rust toolchain manually.
 - After reviewing a Cargo update, regenerate add-on metadata before rerunning CI.

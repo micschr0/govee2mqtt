@@ -4,7 +4,7 @@
     "amd64": "linux/amd64"
   },
   "baseline": "9b10da79bc1f184a181b3d008f68d6996d9a807a",
-  "content_id": "0681c0dd864b834dceff5c157ecf4327e5dbd04d79eb81e514ff3d3fb68b08ad",
+  "content_id": "27a6ce505cecd700b1270dbd3a4511e2ee6b5cd4604685b9e3b0b62de0cb8007",
   "input_sha256": {
     "CHANGELOG.md": "e7c496ff4082e3a4d547b20d0fcc72ac5ab0b91dff74299b4e641295251f9871",
     "DOCS.md": "930a88a3cd9c1e91e3a65c2b5808251dc8cfcf1ffd3eadc43f83905d7d3ebf4c",
@@ -44,7 +44,7 @@
     "local-source/src/__k9_snapshots__/undoc_api/undoc_api_test_issue_21.snap": "49e3e7f35fca1de4fb793824987b6b9685b055c0bcb92e0ac41617e54f5270bf",
     "local-source/src/__k9_snapshots__/undoc_api/undoc_api_test_light_effect_library.snap": "2f739e43e1b715a2196e543be3e402da5fd4793ca87ef9c21f1b52c43203646f",
     "local-source/src/ble.rs": "0ce3f057c1ae311f8c7e131869eab9711c82951097ae677a9a609df8ae4694aa",
-    "local-source/src/cache.rs": "c0b58132e8970951db9a330c196df08d7469892fe3cbebd36e534b3dde50d756",
+    "local-source/src/cache.rs": "c51530d2cd7857096d3ee740e704595b2d2725fc3a8d359abd90a25887f7ad78",
     "local-source/src/commands/http_control.rs": "6a6e2175b18fcc7608467e951eccf86e85cfdb02be2621727f72138ce213ac9b",
     "local-source/src/commands/lan_control.rs": "886aa35a9419d88d3f5f183c4f9e7c91320d04c956bc6c528829dfbb2a8fc055",
     "local-source/src/commands/lan_disco.rs": "978384e3c29f86a4e7b4439129e886a05fc8aad71a5aed0c93bb7069f04fe383",

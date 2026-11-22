@@ -514,7 +514,11 @@ mod sqlite_compatibility_tests {
         drop(cache);
 
         let empty_path = TestCachePath::new();
+        #[cfg(unix)]
+        prepare_cache_file(&empty_path.0).unwrap();
+        #[cfg(not(unix))]
         std::fs::File::create(&empty_path.0).unwrap();
+        assert_eq!(std::fs::metadata(&empty_path.0).unwrap().len(), 0);
         let empty_cache = open_cache(&empty_path.0).unwrap();
         let result = cache_get_from(&empty_cache, options, async {
             Ok(CacheComputeResult::Value("empty file refresh".to_string()))
