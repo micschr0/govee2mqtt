@@ -1,5 +1,5 @@
 name: Govee to MQTT Bridge
-version: "2026.11.25"
+version: "2026.11.26"
 slug: govee2mqtt_security_local
 description: Local-first Govee control and Home Assistant MQTT discovery
 stage: stable

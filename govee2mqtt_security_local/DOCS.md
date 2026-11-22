@@ -3,8 +3,9 @@
 Add `https://github.com/micschr0/govee2mqtt` as a Supervisor add-on repository.
 Select Govee to MQTT Bridge and configure a reachable MQTT broker. Start it
 manually the first time to check logs and MQTT devices. Enable LAN Control on
-supported devices; independent H60C1 zones are not supported. Govee account/API
-credentials are optional. HTTP/WebUI stay disabled without `http_bind`; an
+supported devices. The H60C1 supports [LAN RGB segments](../docs/LAN.md#h60c1-rgb-segments),
+not dedicated white or segment brightness. Govee account/API credentials are
+optional. HTTP/WebUI stay disabled without `http_bind`; an
 enabled API has no authentication. AppArmor and host networking remain enabled.
 
 The sole application lives in `local-source/`. Both amd64 and aarch64 build it

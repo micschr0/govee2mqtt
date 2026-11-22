@@ -35,6 +35,42 @@ The supplied Docker setup uses host networking.
 
 Options and syntax: [LAN configuration](CONFIG.md#lan-api-control).
 
-Model-specific research: [H60C1 local white and color zones](H60C1-LOCAL-ZONES.md)
-contains the evidence inventory and hardware protocol; physical LAN support
-remains inconclusive.
+## H60C1 RGB segments
+
+When the bridge discovers an H60C1 over IPv4, Home Assistant discovers three RGB
+segment entities without a Govee account or API key. The numbering is logical,
+not a physical map. The [owner's test on firmware 1.01.27](qa/H60C1-RGB-OWNER-OBSERVATION.md)
+showed all three colors at once; it did not establish single-segment isolation
+or behavior on other firmware versions. Discovery checks the model, not the
+firmware version.
+
+Use the original light entity for power, whole-lamp brightness and white
+temperature. The bridge ignores segment MQTT commands without an RGB color.
+Home Assistant may still show power and brightness controls for RGB lights,
+and may scale the RGB values it sends. The bridge sends no separate power or
+brightness command. RGB white does not address dedicated white LEDs. Segment
+colors shown by Home Assistant are optimistic; they may be stale after batch
+commands, whole-lamp changes or changes in the Govee app. The bridge has no
+segment readback.
+
+To set one to three colors as one LAN datagram, publish a JSON array to
+`gv2mqtt/light/<device-id>/segments/command`. Use the ID from the whole-light
+command topic. For example, from a Home Assistant action:
+
+```yaml
+action: mqtt.publish
+data:
+  topic: gv2mqtt/light/<device-id>/segments/command
+  retain: false
+  payload: >-
+    [{"segment":1,"color":{"r":255,"g":0,"b":0}},
+     {"segment":2,"color":{"r":0,"g":255,"b":0}},
+     {"segment":3,"color":{"r":0,"g":0,"b":255}}]
+```
+
+Segment numbers are distinct integers from 1 to 3; each RGB channel is an
+integer from 0 to 255. An invalid entry rejects the entire batch. The bridge
+sends the frames in order with no cloud fallback. It ignores retained
+command replays; a successful UDP send is not a device acknowledgment.
+
+The separate [white and color-zone investigation](H60C1-LOCAL-ZONES.md) remains open.

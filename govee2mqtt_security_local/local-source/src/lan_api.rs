@@ -25,6 +25,7 @@ const CMD_PORT: u16 = 4003;
 /// The multicast group of which govee LAN-API enabled devices are members
 const MULTICAST: IpAddr = IpAddr::V4(Ipv4Addr::new(239, 255, 255, 250));
 const MAX_RESPONSE_BYTES: usize = 4096;
+pub const H60C1_RGB_SEGMENTS: u32 = 3;
 
 #[derive(clap::Parser, Debug)]
 pub struct LanDiscoArguments {
@@ -260,6 +261,45 @@ impl LanDevice {
             .await
     }
 
+    pub fn supports_segment_rgb(&self) -> bool {
+        self.sku == "H60C1"
+            && matches!(self.ip, IpAddr::V4(ip)
+                if !ip.is_unspecified() && !ip.is_broadcast() && !ip.is_multicast())
+    }
+
+    pub async fn send_segment_rgb(&self, updates: &[SegmentRgb]) -> anyhow::Result<()> {
+        self.send_request(self.segment_rgb_request(updates)?).await
+    }
+
+    fn segment_rgb_request(&self, updates: &[SegmentRgb]) -> anyhow::Result<Request> {
+        anyhow::ensure!(
+            self.supports_segment_rgb(),
+            "segment RGB requires a LAN-discovered H60C1 with an IPv4 address"
+        );
+        anyhow::ensure!(
+            (1..=H60C1_RGB_SEGMENTS as usize).contains(&updates.len()),
+            "expected one to three segment colors"
+        );
+
+        let mut command = Vec::with_capacity(updates.len());
+        let mut seen = 0_u16;
+        for &SegmentRgb { segment, color } in updates {
+            anyhow::ensure!(
+                (1..=H60C1_RGB_SEGMENTS).contains(&segment),
+                "segment must be 1–3"
+            );
+            let mask = 1_u16 << (segment - 1);
+            anyhow::ensure!(seen & mask == 0, "duplicate segment {segment}");
+            seen |= mask;
+
+            let mut frame = vec![0; 14];
+            frame[..7].copy_from_slice(&[0x33, 0x05, 0x15, 0x01, color.r, color.g, color.b]);
+            frame[12..14].copy_from_slice(&mask.to_le_bytes());
+            command.extend(Base64HexBytes::with_bytes(frame).base64());
+        }
+        Ok(Request::PtReal { command })
+    }
+
     pub async fn send_color_temperature_kelvin(
         &self,
         color_temperature_kelvin: u32,
@@ -325,6 +365,13 @@ pub struct DeviceColor {
     pub r: u8,
     pub g: u8,
     pub b: u8,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SegmentRgb {
+    pub segment: u32,
+    pub color: DeviceColor,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -659,6 +706,82 @@ mod tests {
         json!({"msg": {"cmd": "scan", "data": data}})
             .to_string()
             .into_bytes()
+    }
+
+    fn segment_device(sku: &str, ip: &str) -> LanDevice {
+        let reply = scan_reply("123456789abcdef0", sku, Some(ip));
+        let Response::Scan(device) = serde_json::from_slice::<ResponseWrapper>(&reply)
+            .unwrap()
+            .msg
+        else {
+            panic!("expected a scan reply");
+        };
+        device
+    }
+
+    #[test]
+    fn h60c1_rgb_segments_match_the_owner_datagram() {
+        let device = segment_device("H60C1", "192.0.2.10");
+        let updates = serde_json::from_value::<Vec<SegmentRgb>>(json!([
+            {"segment": 1, "color": {"r": 255, "g": 0, "b": 0}},
+            {"segment": 2, "color": {"r": 0, "g": 255, "b": 0}},
+            {"segment": 3, "color": {"r": 0, "g": 0, "b": 255}}
+        ]))
+        .unwrap();
+        let request = device.segment_rgb_request(&updates).unwrap();
+        assert_eq!(
+            serde_json::to_value(RequestMessage { msg: request }).unwrap(),
+            json!({"msg": {"cmd": "ptReal", "data": {"command": [
+                "MwUVAf8AAAAAAAAAAQAAAAAAANw=",
+                "MwUVAQD/AAAAAAAAAgAAAAAAAN8=",
+                "MwUVAQAA/wAAAAAABAAAAAAAANk="
+            ]}}})
+        );
+        let request = device.segment_rgb_request(&updates[1..2]).unwrap();
+        assert!(matches!(request, Request::PtReal { command }
+            if command == ["MwUVAQD/AAAAAAAAAgAAAAAAAN8="]));
+    }
+
+    #[test]
+    fn h60c1_rgb_segments_reject_invalid_batches_and_targets() {
+        let device = segment_device("H60C1", "192.0.2.10");
+        let rgb = DeviceColor { r: 0, g: 1, b: 2 };
+        assert!(device.segment_rgb_request(&[]).is_err());
+        for segment in [0, 4, u32::MAX] {
+            assert!(device
+                .segment_rgb_request(&[SegmentRgb {
+                    segment,
+                    color: rgb
+                }])
+                .is_err());
+        }
+        let update = SegmentRgb {
+            segment: 1,
+            color: rgb,
+        };
+        let same_segment = SegmentRgb {
+            segment: 1,
+            color: DeviceColor::default(),
+        };
+        assert!(device.segment_rgb_request(&[update, same_segment]).is_err());
+        for (sku, ip) in [
+            ("H60B0", "192.0.2.10"),
+            ("H60C1", "2001:db8::1"),
+            ("H60C1", "239.255.255.250"),
+        ] {
+            assert!(segment_device(sku, ip)
+                .segment_rgb_request(&[SegmentRgb {
+                    segment: 1,
+                    color: rgb
+                }])
+                .is_err());
+        }
+        for red in [json!(-1), json!(256), json!(0.5), json!("32")] {
+            assert!(serde_json::from_value::<SegmentRgb>(json!({
+                "segment": 1, "color": {"r": red, "g": 0, "b": 0}
+            }))
+            .is_err());
+        }
     }
 
     #[tokio::test]
