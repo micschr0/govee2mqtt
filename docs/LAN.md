@@ -12,6 +12,16 @@ The bridge uses UDP:
 Port 4002 must be available for a local bind. Devices reply to the bridge's
 source IP on port 4002; firewall rules and VLAN routing must allow this return path.
 
+The bridge uses the UDP sender IP for discovery. The IP field in a reply can be
+missing, empty, or unspecified (`0.0.0.0` or `::`). Any other IP must match the
+sender. The next valid discovery reply can update a device's IP after a DHCP
+change without restarting the bridge. If you use an explicit IP in `scan`,
+update it after an address change or reserve a DHCP address.
+
+Govee LAN discovery does not authenticate replies or device IDs. The bridge
+trusts discovery replies from the networks that can reach it. Use LAN control
+only on trusted networks and restrict access to UDP port 4002 accordingly.
+
 ## If discovery fails
 
 1. Check LAN Control, the device IP and firewall rules.

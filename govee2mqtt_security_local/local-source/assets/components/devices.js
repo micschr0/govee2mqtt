@@ -1,162 +1,114 @@
-import { LitElement, html} from "lit";
-import { styleMap} from "lit/directives/style-map.js";
-import { Task } from '@lit/task';
-import { timeAgo } from './timeago.js';
+import {timeAgo} from './timeago.js';
 
-export class DeviceList extends LitElement {
-  timer;
-  deviceList;
+const table = document.querySelector('#devices');
+const body = table.tBodies[0];
+const template = document.querySelector('#device-row');
+const listStatus = document.querySelector('#list-status');
+const controlError = document.querySelector('#control-error');
+const rows = new Map();
+let writeVersion = 0;
 
-  static properties = {
-    id: { type: String },
-    label: { type: String },
-    value: { type: String },
-  };
+function showStatus(element, message) {
+  element.hidden = !message;
+  if (element.textContent !== message) element.textContent = message;
+}
 
-  constructor() {
-    super();
-    this.value = "";
-  }
+async function request(path, method = 'GET') {
+  const response = await fetch(path, {method, signal: AbortSignal.timeout(10000)});
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response;
+}
 
-  _deviceListTask = new Task(this, {
-    task: async ([], {signal}) => {
-      const response = await fetch('/api/devices', {signal});
-      if (!response.ok) {
-        throw new Error(response.status);
-      }
-      return response.json();
-    },
-    args: () => []
-  });
-
-  render() {
-    return this._deviceListTask.render({
-      pending: () => {
-        if (this.deviceList === undefined) {
-          return html`<p>Loading devices...</p>`;
-        }
-        return this._render_device_list(this.deviceList);
-      },
-      complete: (devices) => {
-        this.deviceList = devices;
-        return this._render_device_list(this.deviceList);
-      }
-    });
-  }
-
-  // This causes the element to appear in the normal DOM which gives it
-  // access to the imported bootstrap CSS
-  // https://stackoverflow.com/a/58462176/149111
-  createRenderRoot() {
-    return this;
-  }
-
-  ensureTimerStarted() {
-    if (this.timer === undefined) {
-      this.timer = setInterval(() => {
-        this._deviceListTask.run();
-      }, 5000);
+function bindControl(input, property, label, action) {
+  let current;
+  input.addEventListener('change', async () => {
+    const selection = input[property];
+    input.disabled = true;
+    showStatus(controlError, '');
+    try {
+      await request(action(selection), 'POST');
+      current = selection;
+      writeVersion++;
+    } catch (error) {
+      input[property] = current;
+      showStatus(controlError, `Could not change ${input.getAttribute('aria-label')}: ${error.message}`);
+    } finally {
+      input.disabled = false;
     }
+  });
+  return (value, name) => {
+    input.setAttribute('aria-label', `${label} for ${name}`);
+    if (!input.disabled && current !== value) input[property] = value;
+    current = value;
+  };
+}
+
+function createRow(id) {
+  const element = template.content.firstElementChild.cloneNode(true);
+  const [name, room, ip, sku, power, color, identifier, updated, source] = element.cells;
+  const time = updated.firstElementChild;
+  const badge = source.firstElementChild;
+  const base = `/api/device/${encodeURIComponent(id)}`;
+  const setPower = bindControl(power.querySelector('input'), 'checked', 'power',
+    (on) => `${base}/power/${on ? 'on' : 'off'}`);
+  const setColor = bindControl(color.querySelector('input'), 'value', 'color',
+    (value) => `${base}/color/${encodeURIComponent(value)}`);
+  identifier.firstElementChild.textContent = id;
+  return {
+    element,
+    update(device) {
+      const state = device.state;
+      name.textContent = device.name;
+      room.textContent = device.room;
+      ip.textContent = device.ip;
+      sku.textContent = device.sku;
+      setPower(state?.on ?? false, device.name);
+      const {r, g, b} = state?.color ?? {r: 0, g: 0, b: 0};
+      setColor(`#${[r, g, b].map((part) => part.toString(16).padStart(2, '0')).join('')}`, device.name);
+      const date = new Date(state?.updated ?? NaN);
+      time.textContent = timeAgo(date);
+      time.dateTime = time.textContent ? state.updated : '';
+      time.title = time.textContent ? date.toLocaleString() : '';
+      badge.textContent = state?.source ?? '';
+      badge.hidden = !badge.textContent;
+    },
+  };
+}
+
+function updateRows(devices) {
+  const removed = new Set(rows.keys());
+  let next = body.firstElementChild;
+  for (const device of devices) {
+    let row = rows.get(device.id);
+    if (!row) {
+      row = createRow(device.id);
+      rows.set(device.id, row);
+    }
+    row.update(device);
+    removed.delete(device.id);
+    if (row.element !== next) body.insertBefore(row.element, next);
+    next = row.element.nextElementSibling;
   }
-
-  ensureTimerStopped() {
-    clearInterval(this.timer);
-    this.timer = undefined;
+  for (const id of removed) {
+    rows.get(id).element.remove();
+    rows.delete(id);
   }
+  table.hidden = devices.length === 0;
+  showStatus(listStatus, devices.length ? '' : 'No devices found.');
+}
 
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.ensureTimerStopped();
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    this.ensureTimerStarted();
-  }
-
-  _set_power_on(e) {
-    const device_id = e.target.dataset.id;
-    const power = e.target.checked ? 'on' : 'off';
-    fetch(`/api/device/${device_id}/power/${power}`);
-  }
-
-  _set_color(e) {
-    const device_id = e.target.dataset.id;
-    const color = encodeURIComponent(e.target.value);
-    console.log(`color will change to ${color}`);
-    fetch(`/api/device/${device_id}/color/${color}`);
-  }
-
-  _render_item = (item) => {
-    const color_value = (item.state?.color.r << 16) | (item.state?.color.g << 8) | (item.state?.color.b);
-    const rgb_hex = `#${color_value.toString(16).padStart(6, '0')}`;
-    const rgb = item.state ? `rgba(${item.state.color.r}, ${item.state.color.g}, ${item.state.color.b}, ${item.state.brightness})`: null;
-    const styles =  {
-      backgroundColor: rgb,
-    };
-
-    const updated = item.state ?
-      html`${timeAgo(new Date(item.state.updated))}` : html``;
-
-    const source = item.state ?
-      html`<span class="badge rounded-pill text-bg-info">${item.state.source}</span>` : html``;
-
-    const power_switch = html`
-    <span class="form-switch"><input
-      data-id=${item.id}
-      class="form-check-input"
-      type="checkbox"
-      role="switch"
-      @click=${this._set_power_on}
-      ?checked=${item.state?.on}
-    ></span>`;
-
-    const color_picker = html`
-      <input
-        class="form-control form-control-color"
-        data-id=${item.id}
-        @change=${this._set_color}
-        type="color"
-        value=${rgb_hex}>
-      `;
-
-    return html`
-        <tr>
-          <td>${item.name}</td>
-          <td>${item.room}</td>
-          <td>${item.ip}</td>
-          <td>${item.sku}</td>
-          <td>${power_switch}</td>
-          <td>${color_picker}</td>
-          <td><tt>${item.id}</tt></td>
-          <td style="width: 10em">${updated}</td>
-          <td>${source}</td>
-        </tr>
-        `;
-  }
-
-  _render_device_list = (devices) => {
-    return html`
-        <table class='table'>
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Room</th>
-              <th scope="col">IP</th>
-              <th scope="col">SKU</th>
-              <th scope="col">Power</th>
-              <th scope="col">Color</th>
-              <th scope="col">ID</th>
-              <th scope="col">Last Updated</th>
-              <th scope="col">Source</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${devices.map(this._render_item)}
-          </tbody>
-        </table>
-          `;
+async function refresh() {
+  const version = writeVersion;
+  try {
+    const response = await request('/api/devices');
+    const devices = await response.json();
+    // Do not overwrite a completed command with a list requested before it.
+    if (version === writeVersion) updateRows(devices);
+  } catch (error) {
+    showStatus(listStatus, `Could not load devices: ${error.message}. Retrying…`);
+  } finally {
+    setTimeout(refresh, 5000);
   }
 }
 
-customElements.define("gv-device-list", DeviceList);
+refresh();

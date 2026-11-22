@@ -11,44 +11,46 @@
         integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
         crossorigin="anonymous" />
       <link href="/assets/style.css" rel="stylesheet" />
-<script type="importmap">
-{
-  "imports": {
-    "lit": "https://unpkg.com/lit@3.1.0",
-    "lit/": "https://unpkg.com/lit@3.1.0/",
-    "lit-element": "https://unpkg.com/lit-element@4.0.2",
-    "lit-element/": "https://unpkg.com/lit-element@4.0.2/",
-    "lit-html": "https://unpkg.com/lit-html@3.1.0",
-    "lit-html/": "https://unpkg.com/lit-html@3.1.0/",
-    "@lit/task": "https://unpkg.com/@lit/task@1.0.0",
-    "@lit/reactive-element": "https://unpkg.com/@lit/reactive-element@2.0.2"
-  }
-}
-</script>
-
     <script type="module" src="/assets/color-modes.js"></script>
     <script type="module" src="/assets/components/devices.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/timeago.js@4.0.2/dist/timeago.min.js"></script>
   </head>
   <body>
     <main class="container p-5">
 
       <div class="bg-body-tertiary p-5 rounded">
-
-      <gv-device-list></gv-device-list>
-
+        <p id="list-status" role="status">Loading devices…</p>
+        <p id="control-error" class="text-danger" role="alert" hidden></p>
+        <table id="devices" class="table" aria-label="Devices" hidden>
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Room</th>
+              <th scope="col">IP</th>
+              <th scope="col">SKU</th>
+              <th scope="col">Power</th>
+              <th scope="col">Color</th>
+              <th scope="col">ID</th>
+              <th scope="col" class="device-updated">Update</th>
+              <th scope="col">Source</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
-
     </main>
 
-    <script
-      src="/assets/popper.min.js"
-      integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"
-      crossorigin="anonymous"></script>
-
-    <script
-      src="/assets/bootstrap.bundle.min.js"
-      integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
-      crossorigin="anonymous"></script>
+    <template id="device-row">
+      <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td><span class="form-switch"><input class="form-check-input" type="checkbox" role="switch"></span></td>
+        <td><input class="form-control form-control-color" type="color"></td>
+        <td><code class="text-body"></code></td>
+        <td><time></time></td>
+        <td><span class="badge rounded-pill text-bg-info" hidden></span></td>
+      </tr>
+    </template>
   </body>
 </html>

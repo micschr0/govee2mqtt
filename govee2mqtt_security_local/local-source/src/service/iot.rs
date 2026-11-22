@@ -11,6 +11,54 @@ use serde::Deserialize;
 use std::time::Duration;
 use tokio::time::timeout;
 
+fn write_iot_file(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+    let temporary = parent.join(format!(".govee-iot-{}", uuid::Uuid::new_v4()));
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&temporary)?;
+    let result = (|| {
+        file.write_all(bytes)?;
+        std::fs::rename(&temporary, path)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
+}
+
+#[cfg(all(test, unix))]
+mod file_tests {
+    use std::os::unix::fs::{symlink, PermissionsExt};
+
+    #[test]
+    fn key_write_replaces_symlink_without_modifying_target() {
+        let dir = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir(&dir).unwrap();
+        let target = dir.join("target");
+        let key = dir.join("key");
+        std::fs::write(&target, b"unchanged").unwrap();
+        symlink(&target, &key).unwrap();
+        super::write_iot_file(&key, b"secret").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"unchanged");
+        assert_eq!(std::fs::read(&key).unwrap(), b"secret");
+        assert_eq!(
+            std::fs::metadata(&key).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
 #[derive(Clone)]
 pub struct IotClient {
     client: mosquitto_rs::Client,
@@ -250,12 +298,12 @@ pub async fn start_iot_client(
         let pem = priv_key
             .private_key_to_pem_pkcs8()
             .context("to_pem_pkcs8")?;
-        std::fs::write(&args.govee_iot_key, &pem)?;
+        write_iot_file(&args.govee_iot_key, &pem)?;
     }
     for cert in container.cert_bags(&res.p12_pass).context("cert_bags")? {
         let cert = openssl::x509::X509::from_der(&cert).context("x509 from der")?;
         let pem = cert.to_pem().context("cert.to_pem")?;
-        std::fs::write(&args.govee_iot_cert, &pem)?;
+        write_iot_file(&args.govee_iot_cert, &pem)?;
     }
 
     let client = mosquitto_rs::Client::with_id(
@@ -295,9 +343,10 @@ pub async fn start_iot_client(
         .await;
 
     tokio::spawn(async move {
-        if let Err(err) = run_iot_subscriber(subscriptions, state, client, acct).await {
+        if let Err(err) = run_iot_subscriber(subscriptions, state.clone(), client, acct).await {
             log::error!("IoT loop failed: {err:#}");
         }
+        state.clear_iot_client().await;
         log::info!("IoT loop terminated");
         Ok::<(), anyhow::Error>(())
     });

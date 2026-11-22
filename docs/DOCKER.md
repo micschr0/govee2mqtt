@@ -5,16 +5,24 @@ include this project's changes.
 
 ## Prerequisites
 
-Requires Docker with Buildx, Rust and `cross` for the existing cross-build.
-From the repository root, for an amd64 host:
+Requires Docker with Buildx and native or configured emulated execution for the
+target architecture. From the repository root:
 
 ```sh
 ./scripts/build-docker.sh linux/amd64 --load -t govee2mqtt:local
 ```
 
-For ARM64, use `linux/arm64`. The script first creates the binary at
-`docker-target/<platform>/govee`; running `docker build .` directly requires that
-prepared binary. This is a local deployment build, not a publication.
+For ARM64 use `linux/arm64`. To call Docker directly, use
+`docker build -t govee2mqtt:local -f Dockerfile govee2mqtt_security_local`.
+Both Dockerfiles use the add-on directory as their context, including its
+generated file allowlist. Do not build with the repository root as context.
+No host binary or `cross` installation is required. The default `verification` profile inherits dev,
+with debug info and incremental compilation disabled. It checks packaging, not
+release performance. Release profiles require separate explicit approval.
+
+[Verification](ADDON-VERIFICATION.md) covers both contexts and architectures,
+including a network-disabled `govee --help` smoke run. Refresh package metadata
+as described in [development](DEVELOPMENT.md) before building modified sources.
 
 ## Configuration
 
@@ -44,5 +52,8 @@ docker compose logs -f govee2mqtt
 Host networking enables UDP discovery on Linux. The broker must be reachable
 from the host; `localhost` refers to the host here. A Docker service name such as
 `mqtt` only works with suitable DNS resolution.
-Cache data and IoT keys live in the Docker volume at `/data`.
+Cache data and IoT keys live at `/data`. The bundled Compose file uses the
+image's anonymous volume, which a new container after `docker compose down`
+does not automatically reuse. Back up `/data` before removing the container.
+If switching to a named volume, migrate the existing data before recreation.
 Network requirements: [LAN](LAN.md).

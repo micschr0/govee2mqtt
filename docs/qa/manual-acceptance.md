@@ -144,6 +144,24 @@ effect. When readback is unavailable, say so and retain the physical check.
 These are handoff instructions, not executed tests or additional dependencies.
 Keep each ticket's existing ACs, dependencies and historical original evidence.
 
+### Local-first checks on a supported lamp
+
+1. On a disposable Home Assistant instance, record the candidate image, SHA,
+   broker and Supervisor versions, and the lamp model/firmware. Record the
+   existing MQTT entities before changing the installation.
+2. Leave Govee credentials unset. Observe on/off, brightness and one supported
+   color or color-temperature command through Home Assistant.
+3. Block internet egress for **both** bridge and lamp (IPv4 and IPv6), preserving
+   LAN and MQTT reachability. Verify the block, restart the bridge while still
+   offline, and observe the same controls. Confirm there are no duplicate or
+   renamed user entities. Record MQTT reports separately from physical effects.
+4. For the optional-cloud check, enable cloud in the disposable instance only.
+   Introduce the agreed bounded cloud failure, including during a cold start,
+   and confirm the same local controls. Restore the cloud route without restarting
+   the bridge; record recovery separately from the local controls.
+5. Restore the original settings and connectivity. Keep credentials, captures
+   and raw logs outside Git; submit the redacted results with the template above.
+
 | Ticket | Required handoff scope | Initial physical status |
 | --- | --- | --- |
 | [#5: LAN without cloud](https://github.com/micschr0/govee2mqtt/issues/5) | LAN protocol fixtures; owner on/off, brightness and supported color/temperature; verified controller and lamp internet isolation; offline bridge restart; safe restoration. Preserve dependency #1. | pending |

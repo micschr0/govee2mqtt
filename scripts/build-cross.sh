@@ -17,8 +17,9 @@ case "$TARGETPLATFORM" in
     ;;
 esac
 
-cross build --target $TARGET --release --bin govee
+SOURCE_DIR=govee2mqtt_security_local/local-source
+cross build --manifest-path "$SOURCE_DIR/Cargo.toml" --target "$TARGET" --locked --profile verification --bin govee
 
 mkdir -p docker-target/$TARGETPLATFORM
-cp target/$TARGET/release/govee docker-target/$TARGETPLATFORM
+cp "${CARGO_TARGET_DIR:-$SOURCE_DIR/target}/$TARGET/verification/govee" "docker-target/$TARGETPLATFORM"
 

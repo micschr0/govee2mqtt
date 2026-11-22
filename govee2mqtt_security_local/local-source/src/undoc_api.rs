@@ -1,5 +1,7 @@
 #![allow(unused)]
-use crate::cache::{cache_get, CacheComputeResult, CacheGetOptions};
+use crate::cache::{
+    cache_get, invalidate_auth_key, scoped_topic, CacheComputeResult, CacheGetOptions, CacheStorage,
+};
 use crate::lan_api::{boolean_int, truthy};
 use crate::opt_env_var;
 use crate::platform_api::{
@@ -103,12 +105,14 @@ impl UndocApiArguments {
     }
 
     pub fn email(&self) -> anyhow::Result<String> {
-        self.opt_email()?.ok_or_else(|| {
-            anyhow::anyhow!(
-                "Please specify the govee account email either via the \
+        self.opt_email()?
+            .filter(|email| !email.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Please specify the govee account email either via the \
                 --govee-email parameter or by setting $GOVEE_EMAIL"
-            )
-        })
+                )
+            })
     }
 
     pub fn opt_password(&self) -> anyhow::Result<Option<String>> {
@@ -119,12 +123,14 @@ impl UndocApiArguments {
     }
 
     pub fn password(&self) -> anyhow::Result<String> {
-        self.opt_password()?.ok_or_else(|| {
-            anyhow::anyhow!(
-                "Please specify the govee account password either via the \
+        self.opt_password()?
+            .filter(|password| !password.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Please specify the govee account password either via the \
                 --govee-password parameter or by setting $GOVEE_PASSWORD"
-            )
-        })
+                )
+            })
     }
 
     pub fn api_client(&self) -> anyhow::Result<GoveeUndocumentedApi> {
@@ -139,6 +145,7 @@ pub struct GoveeUndocumentedApi {
     email: String,
     password: String,
     client_id: String,
+    cache_topic: String,
 }
 
 impl GoveeUndocumentedApi {
@@ -147,10 +154,12 @@ impl GoveeUndocumentedApi {
         let password = password.into();
         let client_id = Uuid::new_v5(&Uuid::NAMESPACE_DNS, email.as_bytes());
         let client_id = format!("{}", client_id.simple());
+        let cache_topic = scoped_topic("undoc-api", &email);
         Self {
             email,
             password,
             client_id,
+            cache_topic,
         }
     }
 
@@ -158,7 +167,8 @@ impl GoveeUndocumentedApi {
     pub async fn get_iot_key(&self, token: &str) -> anyhow::Result<IotKey> {
         cache_get(
             CacheGetOptions {
-                topic: "undoc-api",
+                storage: CacheStorage::MemoryOnly,
+                topic: &self.cache_topic,
                 key: "iot-key",
                 soft_ttl: HALF_DAY,
                 hard_ttl: HALF_DAY,
@@ -197,7 +207,7 @@ impl GoveeUndocumentedApi {
     }
 
     pub fn invalidate_account_login(&self) {
-        crate::cache::invalidate_key("undoc-api", "account-info").ok();
+        invalidate_auth_key(&self.cache_topic, "account-info").ok();
     }
 
     async fn login_account_impl(&self) -> anyhow::Result<CacheComputeResult<LoginAccountResponse>> {
@@ -239,7 +249,8 @@ impl GoveeUndocumentedApi {
     pub async fn login_account_cached(&self) -> anyhow::Result<LoginAccountResponse> {
         cache_get(
             CacheGetOptions {
-                topic: "undoc-api",
+                storage: CacheStorage::MemoryOnly,
+                topic: &self.cache_topic,
                 key: "account-info",
                 soft_ttl: HALF_DAY,
                 hard_ttl: HALF_DAY,
@@ -287,7 +298,8 @@ impl GoveeUndocumentedApi {
     async fn login_community_synthetic(&self) -> anyhow::Result<LoginAccountResponse> {
         cache_get(
             CacheGetOptions {
-                topic: "undoc-api",
+                storage: CacheStorage::MemoryOnly,
+                topic: &self.cache_topic,
                 key: "account-info-community",
                 soft_ttl: HALF_DAY,
                 hard_ttl: HALF_DAY,
@@ -341,12 +353,12 @@ impl GoveeUndocumentedApi {
     }
 
     pub fn invalidate_community_synthetic(&self) {
-        crate::cache::invalidate_key("undoc-api", "account-info-community").ok();
+        invalidate_auth_key(&self.cache_topic, "account-info-community").ok();
     }
 
     /// A 401 on a community-authenticated call means the cached community
     /// credentials are dead. Drop both derived entries so the next call
-    /// re-logs-in instead of replaying the stale token until its file-backed
+    /// re-logs-in instead of replaying the stale token until its in-memory
     /// cache TTL expires (review EXP-RC-01).
     fn invalidate_community_caches(&self) {
         self.invalidate_community_login();
@@ -390,14 +402,15 @@ impl GoveeUndocumentedApi {
     }
 
     pub fn invalidate_community_login(&self) {
-        crate::cache::invalidate_key("undoc-api", "community-login").ok();
+        invalidate_auth_key(&self.cache_topic, "community-login").ok();
     }
 
     /// Login to community-api.govee.com and return the bearer token
     pub async fn login_community(&self) -> anyhow::Result<String> {
         cache_get(
             CacheGetOptions {
-                topic: "undoc-api",
+                storage: CacheStorage::MemoryOnly,
+                topic: &self.cache_topic,
                 key: "community-login",
                 soft_ttl: ONE_DAY,
                 hard_ttl: HALF_DAY,
@@ -463,7 +476,8 @@ impl GoveeUndocumentedApi {
 
         cache_get(
             CacheGetOptions {
-                topic: "undoc-api",
+                storage: CacheStorage::Disk,
+                topic: "public-scenes",
                 key: &key,
                 soft_ttl: ONE_DAY,
                 hard_ttl: ONE_WEEK,
@@ -531,7 +545,8 @@ impl GoveeUndocumentedApi {
     ) -> anyhow::Result<Vec<OneClickComponent>> {
         cache_get(
             CacheGetOptions {
-                topic: "undoc-api",
+                storage: CacheStorage::Disk,
+                topic: &self.cache_topic,
                 key: "one-click-shortcuts",
                 soft_ttl: ONE_DAY,
                 hard_ttl: ONE_WEEK,
@@ -827,10 +842,9 @@ pub struct OneClickIotRuleDevice {
 
 /// Detect Govee's 2FA login block (it reports application status 454 on the
 /// primary `account/v1/login` endpoint). We check both the typed
-/// [`HttpRequestFailed`] error and the rendered error chain: the typed error is
-/// the cleanest signal, but the response cache (see `cache.rs`) renders compute
-/// errors to a string before returning them, which erases the concrete error
-/// type. Matching `code 454` (emitted by `HttpRequestFailed`'s content) covers
+/// [`HttpRequestFailed`] error and the rendered error chain: cached auth
+/// failures replay a string instead of the original error. Matching
+/// `code 454` (emitted by `HttpRequestFailed`'s content) covers
 /// the cached case without the false positives a bare `454` match would risk;
 /// trailing digits are rejected so `code 4540` does not match (EXP-RC-05).
 fn is_2fa_login_block(err: &anyhow::Error) -> bool {

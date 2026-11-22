@@ -15,6 +15,7 @@ use async_channel::Receiver;
 use mosquitto_rs::router::{MqttRouter, Params, Payload, State};
 use mosquitto_rs::{Client, Event, QoS};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -29,9 +30,14 @@ pub struct HassArguments {
 
     /// The mqtt broker port
     /// You may also set this via the GOVEE_MQTT_PORT environment variable.
-    /// If unspecified, uses 1883
+    /// Defaults to 1883 without TLS or 8883 with TLS.
     #[arg(long, global = true)]
     mqtt_port: Option<u16>,
+
+    /// Enable TLS using this PEM CA file to verify the broker certificate.
+    /// You may also set this via the GOVEE_MQTT_TLS_CA environment variable.
+    #[arg(long, global = true)]
+    mqtt_tls_ca: Option<PathBuf>,
 
     /// The username to authenticate against the broker
     /// You may also set this via the GOVEE_MQTT_USER environment variable.
@@ -75,10 +81,17 @@ impl HassArguments {
         })
     }
 
-    pub fn mqtt_port(&self) -> anyhow::Result<u16> {
+    pub fn mqtt_port(&self, tls: bool) -> anyhow::Result<u16> {
         match self.mqtt_port {
             Some(p) => Ok(p),
-            None => Ok(opt_env_var("GOVEE_MQTT_PORT")?.unwrap_or(1883)),
+            None => Ok(opt_env_var("GOVEE_MQTT_PORT")?.unwrap_or(if tls { 8883 } else { 1883 })),
+        }
+    }
+
+    fn mqtt_tls_ca(&self) -> anyhow::Result<Option<PathBuf>> {
+        match &self.mqtt_tls_ca {
+            Some(path) => Ok(Some(path.clone())),
+            None => opt_env_var("GOVEE_MQTT_TLS_CA"),
         }
     }
 
@@ -109,10 +122,12 @@ impl HassArguments {
 #[derive(Clone)]
 pub struct HassClient {
     client: Client,
+    registration: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl HassClient {
     async fn register_with_hass(&self, state: &StateHandle) -> anyhow::Result<()> {
+        let _registration = self.registration.lock().await;
         let entities = enumerate_all_entites(state).await?;
 
         // Register the configs
@@ -575,6 +590,19 @@ async fn run_mqtt_loop(
 
     let mut router = rebuild_router(&client, &state).await?;
     let mut need_rebuild = false;
+    let refresh_state = state.clone();
+    let hass = refresh_state
+        .get_hass_client()
+        .await
+        .expect("have hass client");
+    tokio::spawn(async move {
+        loop {
+            refresh_state.discovery_changed.notified().await;
+            if let Err(err) = hass.register_with_hass(&refresh_state).await {
+                log::warn!("Could not refresh Home Assistant discovery: {err:#}");
+            }
+        }
+    });
 
     while let Ok(event) = subscriber.recv().await {
         match event {
@@ -595,6 +623,7 @@ async fn run_mqtt_loop(
                 log::info!("MQTT connected with status={status}");
                 if need_rebuild {
                     router = rebuild_router(&client, &state).await?;
+                    need_rebuild = false;
                 }
             }
         }
@@ -619,7 +648,23 @@ pub async fn spawn_hass_integration(
     let mqtt_host = args.mqtt_host()?;
     let mqtt_username = args.mqtt_username()?;
     let mqtt_password = args.mqtt_password()?;
-    let mqtt_port = args.mqtt_port()?;
+    let mqtt_tls_ca = args.mqtt_tls_ca()?;
+    let tls = mqtt_tls_ca.is_some();
+    let mqtt_port = args.mqtt_port(tls)?;
+
+    if let Some(ca) = mqtt_tls_ca.as_deref() {
+        // Port 0 selects a Unix socket and skips libmosquitto's hostname check.
+        anyhow::ensure!(mqtt_port != 0, "MQTT TLS requires a nonzero TCP port");
+        anyhow::ensure!(
+            ca.metadata()
+                .context("Cannot access MQTT TLS CA file")?
+                .is_file(),
+            "MQTT TLS CA file must be a regular PEM file"
+        );
+        client
+            .configure_tls::<&Path, &Path, &Path, &Path>(Some(ca), None, None, None, None)
+            .context("Cannot configure MQTT TLS CA file")?;
+    }
 
     client.set_last_will(availability_topic(), "offline", QoS::AtMostOnce, false)?;
 
@@ -633,20 +678,27 @@ pub async fn spawn_hass_integration(
     let mut connected = false;
     for _ in 0..30 {
         log::info!("Attempting connection to mqtt broker {mqtt_host}:{mqtt_port}...");
-        match client
-            .connect(
-                &mqtt_host,
-                mqtt_port.into(),
-                Duration::from_secs(120),
-                args.mqtt_bind_address.as_deref(),
-            )
-            .await
-        {
+        let connect = client.connect(
+            &mqtt_host,
+            mqtt_port.into(),
+            Duration::from_secs(120),
+            args.mqtt_bind_address.as_deref(),
+        );
+        let result = if tls {
+            // No MQTT CONNACK arrives if the TLS handshake fails asynchronously.
+            tokio::time::timeout(Duration::from_secs(10), connect)
+                .await
+                .context("MQTT TLS connection did not receive a broker acknowledgement")?
+        } else {
+            connect.await
+        };
+        match result {
             Ok(status) => {
                 log::info!("Connected to mqtt broker {mqtt_host}:{mqtt_port}, status={status}");
                 connected = true;
                 break;
             }
+            Err(err) if tls => return Err(err).context("MQTT TLS connection failed"),
             Err(err) => {
                 log::error!("Failed to connect to mqtt broker {mqtt_host}:{mqtt_port}: {err:#}");
                 tokio::time::sleep(Duration::from_secs(2)).await;
@@ -664,6 +716,7 @@ pub async fn spawn_hass_integration(
     state
         .set_hass_client(HassClient {
             client: client.clone(),
+            registration: Arc::default(),
         })
         .await;
 

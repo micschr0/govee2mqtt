@@ -11,7 +11,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
 
 #[derive(Clone)]
 pub struct Cache {
@@ -77,6 +77,26 @@ impl Cache {
         let w = Arc::downgrade(&inner);
         std::thread::spawn(move || periodic_task(config, stop_rx, completion_tx, w));
         Ok(Self { inner })
+    }
+
+    /// Delete all cached rows without replacing the connection or invalidating topics.
+    pub fn clear(&self) -> Result<(), rusqlite::Error> {
+        let mut conn = self.inner.conn.lock().unwrap();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        // Only interpolate identifiers made from the cache topic alphabet.
+        let tables = tx
+            .prepare(
+                "select name from main.sqlite_schema where type = 'table' \
+                 and name glob 'topic_*' and name not glob 'topic_*[^A-Z2-7]*'",
+            )?
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        for table in tables {
+            tx.execute(&format!("delete from main.{table}"), [])?;
+        }
+        tx.commit()?;
+        self.inner.lazy_expiry_update.lock().unwrap().clear();
+        Ok(())
     }
 
     fn flush(&self) {

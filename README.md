@@ -1,13 +1,13 @@
 # govee2mqtt
 
 Independently maintained fork of [wez/govee2mqtt](https://github.com/wez/govee2mqtt).
-Connects Govee devices to Home Assistant through MQTT. Source and issue tracker:
-[micschr0/govee2mqtt](https://github.com/micschr0/govee2mqtt).
+Connects Govee devices to Home Assistant through MQTT. Start with local control
+over your LAN; opt into Govee cloud features only if you need them.
 
 ## Features and fork improvements
 
-- LAN control preferred; supported devices work without cloud credentials.
-- Govee Platform API for additional device functions, effects and segments.
+- LAN control for supported models without a Govee account or API key in the bridge.
+- Optional Govee Platform API for additional device functions, effects and segments.
 - Optional Govee account for IoT status updates, rooms and Tap-to-Run scenes.
 - HTTP API and WebUI disabled by default; require an explicit bind address.
 - Login fallback for Govee error 454, updated dependencies and a local SQLite cache patch.
@@ -20,7 +20,10 @@ are unsupported. The HTTP API has no authentication when enabled.
 
 1. Set up an MQTT broker and the MQTT integration in Home Assistant.
 2. Choose [Docker](docs/DOCKER.md) or the [Home Assistant add-on](docs/ADDON.md).
-3. Apply the [configuration](docs/CONFIG.md); enable LAN Control on each LAN device.
+3. Enable LAN Control in the Govee app for each supported device. Configure only
+   MQTT in the bridge to start; leave Govee credentials and HTTP bind unset.
+4. For features your device does not expose locally, see
+   [Govee cloud opt-in](docs/CONFIG.md#govee-cloud-opt-in).
 
 | Topic | Documentation |
 | --- | --- |
@@ -29,7 +32,8 @@ are unsupported. The HTTP API has no authentication when enabled.
 | Data and credentials | [Privacy](docs/PRIVACY.md) |
 | Development and source trees | [Development](docs/DEVELOPMENT.md) |
 | Automated checks | [CI](docs/ci-cd.md) |
-| Security requirements and pending acceptance | [Security](docs/security/README.md) |
+| Security reporting and acceptance | [Report privately](SECURITY.md), [acceptance status](docs/security/README.md) |
+| Releases and rollback | [Release procedure](docs/RELEASE.md) |
 
 The store package remains experimental. Local checks do not replace full
 acceptance testing with Home Assistant, MQTT and real devices.
@@ -40,3 +44,7 @@ MIT; see [LICENSE.md](LICENSE.md). Originally by Wez Furlong, building on
 [Govee LAN Control](https://github.com/wez/govee-lan-hass/).
 AWS IoT support draws on work from
 [bwp91/homebridge-govee](https://github.com/bwp91/homebridge-govee/).
+
+Development, Docker and the Home Assistant store use the sole application tree
+at `govee2mqtt_security_local/local-source/`. See [source layout](docs/SOURCE-LAYOUT.md)
+and [development commands](docs/DEVELOPMENT.md).

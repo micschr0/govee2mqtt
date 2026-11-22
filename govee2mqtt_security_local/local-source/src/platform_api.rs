@@ -1,4 +1,4 @@
-use crate::cache::{cache_get, CacheComputeResult, CacheGetOptions};
+use crate::cache::{cache_get, scoped_topic, CacheComputeResult, CacheGetOptions, CacheStorage};
 use crate::hass_mqtt::climate::parse_temperature_constraints;
 use crate::opt_env_var;
 use crate::service::state::sort_and_dedup_scenes;
@@ -44,12 +44,14 @@ impl GoveeApiArguments {
     }
 
     pub fn api_key(&self) -> anyhow::Result<String> {
-        self.opt_api_key()?.ok_or_else(|| {
-            anyhow::anyhow!(
-                "Please specify the api key either via the \
+        self.opt_api_key()?
+            .filter(|key| !key.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Please specify the api key either via the \
                 --api-key parameter or by setting $GOVEE_API_KEY"
-            )
-        })
+                )
+            })
     }
 
     pub fn api_client(&self) -> anyhow::Result<GoveeApiClient> {
@@ -61,17 +63,21 @@ impl GoveeApiArguments {
 #[derive(Clone)]
 pub struct GoveeApiClient {
     key: String,
+    cache_topic: String,
 }
 
 impl GoveeApiClient {
     pub fn new<K: Into<String>>(key: K) -> Self {
-        Self { key: key.into() }
+        let key = key.into();
+        let cache_topic = scoped_topic("http-api", &key);
+        Self { key, cache_topic }
     }
 
     pub async fn get_devices(&self) -> anyhow::Result<Vec<HttpDeviceInfo>> {
         cache_get(
             CacheGetOptions {
-                topic: "http-api",
+                storage: CacheStorage::Disk,
+                topic: &self.cache_topic,
                 key: "device-list",
                 soft_ttl: Duration::from_secs(900),
                 hard_ttl: ONE_WEEK,
@@ -79,12 +85,18 @@ impl GoveeApiClient {
                 allow_stale: true,
             },
             async {
-                let url = endpoint("/router/api/v1/user/devices");
-                let resp: GetDevicesResponse = self.get_request_with_json_response(url).await?;
-                Ok(CacheComputeResult::Value(resp.data))
+                Ok(CacheComputeResult::Value(
+                    self.fetch_devices(endpoint("/router/api/v1/user/devices"))
+                        .await?,
+                ))
             },
         )
         .await
+    }
+
+    pub(crate) async fn fetch_devices(&self, url: String) -> anyhow::Result<Vec<HttpDeviceInfo>> {
+        let response: GetDevicesResponse = self.get_request_with_json_response(url).await?;
+        Ok(response.data)
     }
 
     pub async fn get_device_by_id<I: AsRef<str>>(&self, id: I) -> anyhow::Result<HttpDeviceInfo> {
@@ -158,7 +170,8 @@ impl GoveeApiClient {
         let key = format!("scene-list-diy-{}-{}", device.sku, device.device);
         cache_get(
             CacheGetOptions {
-                topic: "http-api",
+                storage: CacheStorage::Disk,
+                topic: &self.cache_topic,
                 key: &key,
                 soft_ttl: Duration::from_secs(300),
                 hard_ttl: ONE_WEEK,
@@ -196,7 +209,8 @@ impl GoveeApiClient {
         let key = format!("scene-list-{}-{}", device.sku, device.device);
         cache_get(
             CacheGetOptions {
-                topic: "http-api",
+                storage: CacheStorage::Disk,
+                topic: &self.cache_topic,
                 key: &key,
                 soft_ttl: Duration::from_secs(300),
                 hard_ttl: ONE_WEEK,

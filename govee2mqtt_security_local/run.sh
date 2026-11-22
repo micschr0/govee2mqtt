@@ -1,26 +1,24 @@
 #!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
 
 export RUST_BACKTRACE=full
 export RUST_LOG_STYLE=always
 export XDG_CACHE_HOME=/data
 
-# No default: setting an explicit IP:port opts into the HTTP API.
-if bashio::config.has_value http_bind ; then
-  export GOVEE_HTTP_BIND="$(bashio::config http_bind)"
-fi
-
 wait_for_mqtt() {
   local max_attempts=30
   local attempt=1
+  local host port
 
   bashio::log.info "mqtt_host was not explicitly configured, waiting for the Mosquitto broker Add-on to become available"
 
   while [ $attempt -le $max_attempts ]; do
-    if bashio::services.available mqtt ; then
-      if timeout 2 bash -c "cat < /dev/null > /dev/tcp/$(bashio::services mqtt host)/$(bashio::services mqtt port)" 2>/dev/null; then
-        bashio::log.info "MQTT broker is ready!"
-        return 0
-      fi
+    if bashio::services.available mqtt &&
+      host="$(bashio::services mqtt host)" &&
+      port="$(bashio::services mqtt port)" &&
+      timeout 2 bash -c 'exec 3<>"/dev/tcp/$1/$2"' bash "$host" "$port" 2>/dev/null; then
+      bashio::log.info "MQTT broker is ready!"
+      return 0
     fi
 
     bashio::log.info "MQTT broker not ready yet (attempt ${attempt}/${max_attempts}), waiting 2 seconds..."
@@ -32,68 +30,45 @@ wait_for_mqtt() {
   return 1
 }
 
-if bashio::config.has_value mqtt_host ; then
-  export GOVEE_MQTT_HOST="$(bashio::config mqtt_host)"
+set_option() {
+  if bashio::config.has_value "$1"; then
+    local value
+    value="$(bashio::config "$1")" || bashio::exit.nok "Cannot read add-on option $1"
+    export "$2=$value"
+  fi
+}
+
+if bashio::config.has_value mqtt_host; then
+  set_option mqtt_host GOVEE_MQTT_HOST
 else
-  if ! wait_for_mqtt ; then
+  if bashio::config.has_value mqtt_tls_ca; then
+    bashio::exit.nok "mqtt_tls_ca requires mqtt_host; configure the TLS broker explicitly"
+  fi
+  if ! wait_for_mqtt; then
     bashio::exit.nok "Mosquitto MQTT broker is not available"
   fi
-  export GOVEE_MQTT_HOST="$(bashio::services mqtt 'host')"
-  export GOVEE_MQTT_PORT="$(bashio::services mqtt 'port')"
-  export GOVEE_MQTT_USER="$(bashio::services mqtt 'username')"
-  export GOVEE_MQTT_PASSWORD="$(bashio::services mqtt 'password')"
+  GOVEE_MQTT_HOST="$(bashio::services mqtt host)" &&
+    GOVEE_MQTT_PORT="$(bashio::services mqtt port)" &&
+    GOVEE_MQTT_USER="$(bashio::services mqtt username)" &&
+    GOVEE_MQTT_PASSWORD="$(bashio::services mqtt password)" ||
+    bashio::exit.nok "Cannot read the MQTT service configuration"
+  export GOVEE_MQTT_HOST GOVEE_MQTT_PORT GOVEE_MQTT_USER GOVEE_MQTT_PASSWORD
 fi
 
-if bashio::config.has_value mqtt_port ; then
-  export GOVEE_MQTT_PORT="$(bashio::config mqtt_port)"
-fi
+set_option mqtt_port GOVEE_MQTT_PORT
+set_option mqtt_tls_ca GOVEE_MQTT_TLS_CA
+set_option mqtt_username GOVEE_MQTT_USER
+set_option mqtt_password GOVEE_MQTT_PASSWORD
+set_option http_bind GOVEE_HTTP_BIND
+set_option debug_level RUST_LOG
+set_option govee_email GOVEE_EMAIL
+set_option govee_password GOVEE_PASSWORD
+set_option govee_api_key GOVEE_API_KEY
+set_option no_multicast GOVEE_LAN_NO_MULTICAST
+set_option broadcast_all GOVEE_LAN_BROADCAST_ALL
+set_option global_broadcast GOVEE_LAN_BROADCAST_GLOBAL
+set_option scan GOVEE_LAN_SCAN
+set_option temperature_scale GOVEE_TEMPERATURE_SCALE
 
-if bashio::config.has_value mqtt_username ; then
-  export GOVEE_MQTT_USER="$(bashio::config mqtt_username)"
-fi
-
-if bashio::config.has_value mqtt_password ; then
-  export GOVEE_MQTT_PASSWORD="$(bashio::config mqtt_password)"
-fi
-
-if bashio::config.has_value debug_level ; then
-  export RUST_LOG="$(bashio::config debug_level)"
-fi
-
-if bashio::config.has_value govee_email ; then
-  export GOVEE_EMAIL="$(bashio::config govee_email)"
-fi
-
-if bashio::config.has_value govee_password ; then
-  export GOVEE_PASSWORD="$(bashio::config govee_password)"
-fi
-
-if bashio::config.has_value govee_api_key ; then
-  export GOVEE_API_KEY="$(bashio::config govee_api_key)"
-fi
-
-if bashio::config.has_value no_multicast ; then
-  export GOVEE_LAN_NO_MULTICAST="$(bashio::config no_multicast)"
-fi
-
-if bashio::config.has_value broadcast_all ; then
-  export GOVEE_LAN_BROADCAST_ALL="$(bashio::config broadcast_all)"
-fi
-
-if bashio::config.has_value global_broadcast ; then
-  export GOVEE_LAN_BROADCAST_GLOBAL="$(bashio::config global_broadcast)"
-fi
-
-if bashio::config.has_value scan ; then
-  export GOVEE_LAN_SCAN="$(bashio::config scan)"
-fi
-
-if bashio::config.has_value temperature_scale ; then
-  export GOVEE_TEMPERATURE_SCALE="$(bashio::config temperature_scale)"
-fi
-
-env | grep GOVEE_ | sed -r 's/_(EMAIL|KEY|PASSWORD)=.*/_\1=REDACTED/'
-set -x
-
-cd /app
+cd /app || bashio::exit.nok "Cannot enter the application directory"
 exec /app/govee serve

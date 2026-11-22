@@ -1,43 +1,12 @@
-// See <https://lit.dev/tutorials/async-directive>
+const formatter = new Intl.RelativeTimeFormat('en', {numeric: 'auto'});
+const units = [
+  ['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400],
+  ['hour', 3600], ['minute', 60], ['second', 1],
+];
 
-import {directive, AsyncDirective} from 'lit/async-directive.js';
-
-class TimeAgoDirective extends AsyncDirective {
-  timer;
-  time;
-
-  render(time) {
-    return timeago.format(time);
-  }
-
-  update(part, [time]) {
-    this.time = time;
-    if (this.isConnected) {
-      this.ensureTimerStarted();
-    }
-    return this.render(time);
-  }
-
-  ensureTimerStarted() {
-    if (this.timer === undefined) {
-      this.timer = setInterval(() => {
-        this.setValue(this.render(this.time));
-      }, 1000);
-    }
-  }
-
-  ensureTimerStopped() {
-    clearInterval(this.timer);
-    this.timer = undefined;
-  }
-
-  disconnected() {
-    this.ensureTimerStopped();
-  }
-
-  reconnected() {
-    this.ensureTimerStarted();
-  }
+export function timeAgo(date) {
+  const seconds = Math.trunc((date.getTime() - Date.now()) / 1000);
+  if (!Number.isFinite(seconds)) return '';
+  const [unit, size] = units.find(([, size]) => Math.abs(seconds) >= size) ?? units.at(-1);
+  return formatter.format(Math.trunc(seconds / size), unit);
 }
-
-export const timeAgo = directive(TimeAgoDirective);

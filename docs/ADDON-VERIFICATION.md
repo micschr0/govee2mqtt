@@ -13,12 +13,10 @@ codes in private test evidence. Keep full failure logs. Never use production or
 real user data. No release script, tag, image push or publication is needed.
 
 Set `BASELINE_PACKAGE` and `CANDIDATE_PACKAGE` to absolute paths of complete,
-reviewed add-on packages at those revisions. For today's layout, obtain each
+reviewed add-on packages at those revisions. Obtain each
 with `git archive <SHA> govee2mqtt_security_local | tar -x -C <new-directory>`;
-the package is `<new-directory>/govee2mqtt_security_local`. Do not copy root
-sources over the snapshot. For a future #1 layout, use its reviewed package
-preparation command and record it. The existing `prepare-local-addon.py` rejects
-HEADs other than its pinned baseline; do not remove that guard to make a test run.
+the package is `<new-directory>/govee2mqtt_security_local`. The candidate package contains the only application sources. No export is needed.
+Check it with `python3 scripts/check-store-source.py --store "$CANDIDATE_PACKAGE"`.
 
 Create a fresh run directory outside the checkout:
 
@@ -107,42 +105,44 @@ MQTT acceptance. Readiness success never counts as packaging or upgrade success.
 
 ## Verification-profile builds, baseline then candidate
 
-The current package Dockerfile hardcodes `--release`. Use **disposable copies**
-with a separate Cargo `verification` profile; never modify either input package.
-The following prepares both contexts, verifies their original integrity, and
-recomputes only the scratch manifest after the explicit profile changes:
+The candidate defaults to the maintained `verification` profile. It needs no
+source mutation: copy the package into a new `$RUN_DIR/candidate` directory and
+pass `--build-arg CARGO_PROFILE=verification`. Validate its metadata first.
+
+The historical baseline at `87fc74b36fe574957d17da08bada0345e4160182` hardcodes
+release. Prepare a disposable baseline context only, never change that package:
 
 ```sh
 export RUN_DIR BASELINE_PACKAGE CANDIDATE_PACKAGE
-python3 - <<'PY'
+python3 - <<'PYCODE'
 import hashlib, os, pathlib, shutil, subprocess
-for role in ('baseline', 'candidate'):
-    source = pathlib.Path(os.environ[role.upper() + '_PACKAGE'])
-    subprocess.run(['sha256sum', '--strict', '-c', 'SHA256SUMS'], cwd=source, check=True)
-    target = pathlib.Path(os.environ['RUN_DIR']) / role
-    shutil.copytree(source, target)  # Refuses an existing destination.
-    dockerfile = target / 'Dockerfile'
-    text = dockerfile.read_text()
-    assert text.count('cargo build --locked --release --bin govee') == 1
-    assert text.count('target/release/govee') == 1
-    text = text.replace('cargo build --locked --release --bin govee',
-                        'cargo build --locked --profile verification --bin govee')
-    dockerfile.write_text(text.replace('target/release/govee', 'target/verification/govee'))
-    cargo = target / 'local-source/Cargo.toml'
-    with cargo.open('a') as stream:
-        stream.write('\n[profile.verification]\ninherits = "dev"\ndebug = 0\nincremental = false\n')
-    manifest = target / 'SHA256SUMS'
-    names = [line.split('  ', 1)[1] for line in manifest.read_text().splitlines()]
-    manifest.write_text(''.join(hashlib.sha256((target / n).read_bytes()).hexdigest()
-                               + '  ' + n + '\n' for n in names))
-PY
+source = pathlib.Path(os.environ['BASELINE_PACKAGE'])
+subprocess.run(['sha256sum', '--strict', '-c', 'SHA256SUMS'], cwd=source, check=True)
+target = pathlib.Path(os.environ['RUN_DIR']) / 'baseline'
+shutil.copytree(source, target)
+dockerfile = target / 'Dockerfile'
+text = dockerfile.read_text()
+assert text.count('cargo build --locked --release --bin govee') == 1
+assert text.count('target/release/govee') == 1
+text = text.replace('cargo build --locked --release --bin govee',
+                    'cargo build --locked --profile verification --bin govee')
+dockerfile.write_text(text.replace('target/release/govee', 'target/verification/govee'))
+with (target / 'local-source/Cargo.toml').open('a') as stream:
+    stream.write('\n[profile.verification]\ninherits = "dev"\ndebug = 0\nincremental = false\n')
+manifest = target / 'SHA256SUMS'
+names = [line.split('  ', 1)[1] for line in manifest.read_text().splitlines()]
+manifest.write_text(''.join(hashlib.sha256((target / n).read_bytes()).hexdigest()
+                           + '  ' + n + '\n' for n in names))
+shutil.copytree(os.environ['CANDIDATE_PACKAGE'], pathlib.Path(os.environ['RUN_DIR']) / 'candidate')
+PYCODE
 ```
 
-Expect two new contexts; a changed Dockerfile shape or an existing verification
-profile fails rather than silently using release. Under #1, adapt this preparation
-to its reviewed layout and retain the separate profile. `SOURCE.json` still
-identifies the **original input**; scratch checksums describe the modified test
-context. Neither directory is a distributable package or release artifact; use them only for local tests.
+The baseline's SOURCE.json identifies its original input; scratch checksums
+identify the profile edits. Neither context is a release artifact. If private
+runner TLS trust requires an extra public CA, use a BuildKit secret in an owned
+scratch Dockerfile and record that transformation privately. Do not commit host
+CA files, credentials or insecure TLS switches. Native or userspace-emulated
+execution is acceptable; record the emulator identity and actual image platform.
 
 Run each role and architecture separately, saving stdout/stderr and the exit
 code for each invocation. Do not hide a build failure behind `tee` without
@@ -156,6 +156,7 @@ PLATFORM=linux/amd64
 IMAGE="govee-addon-verify:$ROLE-$ARCH"
 docker buildx build --builder "$BUILDER" --platform "$PLATFORM" --load \
   --build-arg "BUILD_ARCH=$ARCH" --build-arg BUILD_VERSION=verification \
+  --build-arg CARGO_PROFILE=verification \
   --progress plain --tag "$IMAGE" "$RUN_DIR/$ROLE"
 timeout 60 docker run --rm --platform "$PLATFORM" --network none \
   --entrypoint /app/govee "$IMAGE" --help
@@ -168,6 +169,24 @@ help text with exit 0 (no serve, no broker, no credentials). Inspect with
 native-only run does not pass the candidate matrix. This profile checks source,
 loader, libraries and packaging; it does not measure release performance.
 
+## Ordinary Docker build
+
+The candidate also needs both architectures built with the root Dockerfile.
+Use a reviewed checkout and the allowlisted add-on directory as the context:
+
+```sh
+docker buildx build --builder "$BUILDER" --platform "$PLATFORM" --load \
+  --build-arg CARGO_PROFILE=verification --progress plain \
+  --tag "govee-ordinary-verify:candidate-$ARCH" -f Dockerfile govee2mqtt_security_local
+timeout 60 docker run --rm --platform "$PLATFORM" --network none \
+  --entrypoint /app/govee "govee-ordinary-verify:candidate-$ARCH" --help
+```
+
+Record each exit and image architecture separately. This context must compile
+from `govee2mqtt_security_local/local-source/`, not a prebuilt host binary.
+The Package verification workflow runs both checks on native runners; locally
+use `sh scripts/verify-packaging.sh amd64` (or `aarch64` on an eligible builder).
+
 ## Isolated Supervisor baseline, upgrade and reset
 
 **Availability: pending; no isolated HA target has been designated.** The
@@ -176,12 +195,19 @@ Keep address, host paths, tokens and broker credentials in private configuration
 If an API tool is used, its credential key is `SUPERVISOR_TOKEN`; never log it.
 A plain Docker `--help` run cannot validate Bashio or Supervisor upgrade behavior.
 
+The store URL without a branch suffix follows the default branch. Home Assistant
+supports `https://github.com/micschr0/govee2mqtt#<branch>` for a store import
+test, but it follows the branch as it changes. Use the local application store
+and the archived package for an exact revision. A local, default-branch, or
+branch-suffixed repository creates a different full app ID; use the same one
+throughout an upgrade.
+
 1. The owner records the disposable target's HA OS/Supervisor and CLI versions,
    architecture and reset snapshot. Confirm no production devices or user data.
    Use `ha apps --help` (older CLI: `ha addons --help`) and `ha store --help`
    to check installed syntax.
 2. Copy the **baseline verification context** from `$RUN_DIR/baseline`
-   into the target's local apps directory as `govee2mqtt_security_local`. Reload
+   into `/local_apps/govee2mqtt_security_local` on the test target. Reload
    the store (`ha store reload`). Expect config slug `govee2mqtt_security_local`
    and installed local slug `local_govee2mqtt_security_local`. A remote repository
    prefix differs; do not switch repositories midway through this test.
@@ -201,16 +227,27 @@ A plain Docker `--help` run cannot validate Bashio or Supervisor upgrade behavio
 6. Start (`ha apps start local_govee2mqtt_security_local`), inspect logs privately,
    expect successful isolated MQTT connection, then stop (`ha apps stop ...`,
    replacing `...` with the full slug). Confirm options and both markers remain.
-7. Replace only the local **package files** with `$RUN_DIR/candidate`,
-   keeping slug and persistent mounts. Both are disposable verification builds. Reload the store. Use the UI Update action
-   when a new version is offered; otherwise use
-   `ha apps rebuild --force local_govee2mqtt_security_local` for a local rebuild.
-   Expect candidate version/source identity; never uninstall between versions.
+7. In `$RUN_DIR/candidate` only, set a new app version in `config.yaml` if
+   the baseline and candidate have the same version. Regenerate and verify the
+   metadata with `python3 scripts/check-store-source.py --store "$RUN_DIR/candidate" --write`
+   and the same command without `--write`. Record the test version, source SHA
+   and updated checksums. Replace only the local **package files**, preserving
+   the full app ID and both persistent mounts. Reload the store and use **Update**.
+   Expect the candidate version and source identity; never uninstall between
+   versions. If no update is offered, a rebuild can test startup but does not
+   pass the upgrade check.
 8. Start the candidate and read back options and both marker files to private
    `after/` with the same structure as `before/`. Run the comparison CLI against
    the saved baseline with
    `python3 scripts/verify-addon-fixtures.py after --baseline before`. Expect no option or marker loss,
    correct mount destinations, HTTP still off, MQTT connected and no new errors.
+   For the autostart candidate, check the Supervisor startup switch after the
+   update: a saved user setting takes precedence over the new default. Enable it
+   if necessary, reboot the entire disposable HA host, and confirm the add-on
+   starts automatically and connects to MQTT. If possible, disable the switch,
+   reboot the host again and confirm the add-on does not start automatically.
+   Record switch state and each result; Docker and fixture tests cannot prove
+   Supervisor autostart.
 9. Save command exits, versions, architecture and redacted results. Record
    packaging and live upgrade independently as pass/fail/pending. A failure stays
    failed even if readiness passed. #1 may claim upgrade acceptance only after
@@ -220,6 +257,10 @@ A plain Docker `--help` run cannot validate Bashio or Supervisor upgrade behavio
     package directory using the owner's test access). Remove only identified
     run-owned images/directories after evidence is retained. Never prune shared
     Docker state. Restore baseline before testing the next candidate.
+
+With no isolated HA target, the update, switch and host-reboot checks remain
+pending. A regular store update for existing installations requires a separately
+approved version step; see [release and rollback](RELEASE.md).
 
 Reference semantics: [HA testing](https://contributors.home-assistant.io/apps/guides/testing/),
 [HA configuration/mounts](https://contributors.home-assistant.io/apps/reference/configuration/),

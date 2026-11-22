@@ -1,7 +1,7 @@
 name: Store integrity
 
 # Gate against 353efef-class incidents (the store folder was briefly deleted
-# and repaired by hand on 2026-10-13): the published HA store mirror must stay
+# and repaired by hand on 2026-10-13): the authoritative HA store sources must stay
 # byte-consistent with its own SHA256SUMS, and SOURCE.json/SOURCE_TAG must be
 # coherent. Review EXP-CICD-01 (2026-10-14).
 
@@ -12,12 +12,20 @@ on:
       - "govee2mqtt_security_local/**"
       - ".github/workflows/store-integrity.yml"
       - "scripts/check-store-source.py"
+      - "tests/**"
+      - "repository.yaml"
+      - "Dockerfile"
+      - ".dockerignore"
   pull_request:
     branches: [main]
     paths:
       - "govee2mqtt_security_local/**"
       - ".github/workflows/store-integrity.yml"
       - "scripts/check-store-source.py"
+      - "tests/**"
+      - "repository.yaml"
+      - "Dockerfile"
+      - ".dockerignore"
   workflow_dispatch:
 
 concurrency:
@@ -44,3 +52,6 @@ jobs:
           sha256sum -c SHA256SUMS
       - name: Check SOURCE.json / SOURCE_TAG coherence
         run: python3 scripts/check-store-source.py
+
+      - name: Test integrity and persistence fixtures
+        run: python3 -m unittest discover -s tests -v
