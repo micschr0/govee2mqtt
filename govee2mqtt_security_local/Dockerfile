@@ -7,8 +7,11 @@ FROM ghcr.io/home-assistant/aarch64-base-debian:bookworm@sha256:d4b28f55cbd80f65
 # Runs on TARGET platform: native builder or already configured QEMU.
 FROM rust:1.99.1-bookworm@sha256:e6f2cff35d0f309acf8433b4f05878ed77092602c5065cc81801177da0bb3a9c AS source-builder
 RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
-    && printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261107T000000Z bookworm main' > /etc/apt/sources.list \
-    && apt-get update \
+    && printf '%s\n' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261107T000000Z bookworm main' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261122T000000Z bookworm-security main' \
+        > /etc/apt/sources.list \
+    && apt-get -o APT::Update::Error-Mode=any update \
     && apt-get install -y --no-install-recommends cmake pkg-config \
     && rm -rf /var/lib/apt/lists/*
 ARG CARGO_PROFILE=verification
@@ -24,8 +27,11 @@ FROM runtime-${BUILD_ARCH}
 ARG BUILD_ARCH
 ARG BUILD_VERSION
 RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
-    && printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261107T000000Z bookworm main' > /etc/apt/sources.list \
-    && apt-get update \
+    && printf '%s\n' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261107T000000Z bookworm main' \
+        'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261122T000000Z bookworm-security main' \
+        > /etc/apt/sources.list \
+    && apt-get -o APT::Update::Error-Mode=any update \
     && apt-get install -y --no-install-recommends ca-certificates libstdc++6 libssl3 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app

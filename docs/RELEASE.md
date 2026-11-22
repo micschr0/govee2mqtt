@@ -5,7 +5,11 @@ The Home Assistant package version comes from `govee2mqtt_security_local/config.
 the package inputs. The embedded build version comes from `SOURCE_TAG` in both
 Docker builds. The authoritative changelog is in the add-on directory.
 
-## Verify before asking for approval
+## Release gates
+
+For an experimental store update, verify the candidate build and automated
+checks, state the untested Supervisor and device paths, and obtain explicit
+approval. Complete all of the checks below before a stable release.
 
 1. Run `make verify` and `make runtime` in a disposable test environment.
    Both commands honor `CARGO_TARGET_DIR`; runtime checks use local fixtures,
@@ -19,6 +23,23 @@ Docker builds. The authoritative changelog is in the add-on directory.
 4. Enable and verify the private reporting route in [SECURITY.md](../SECURITY.md).
 
 ## After explicit maintainer approval
+
+### Home Assistant store update
+
+Use an unused `YYYY.MM.DD` version. From the repository root, set `TAG_NAME` to
+that version and run `sh scripts/apply-tag.sh` to refresh the manifest, embedded
+version and checksums. Update the add-on changelog and verify the complete
+candidate tree in its pull request before merging.
+
+For the documented repository URL without a branch suffix, Supervisor follows
+the default branch, not Git tags or GitHub Releases. Merge the approved version
+and build context into `main`; keep the repository URL and app slug unchanged.
+Record the merge SHA and package version.
+Then reload the store and update the existing app without uninstalling it.
+Leave `stage: experimental` until the isolated Supervisor upgrade and device
+acceptance are recorded.
+
+### Optional Git tag
 
 Use a clean checkout, an unused version and `git-cliff`. With `TAG_NAME` set to
 the approved version, `scripts/tag-release.sh` generates the changelog, updates

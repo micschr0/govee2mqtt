@@ -19,6 +19,8 @@ Cargo Audit also runs weekly. There is no automatic container release workflow.
 - Actions are pinned to commit SHAs.
 - Renovate owns Cargo and GitHub Actions version updates; automerge is disabled.
 - Update Docker base images and the pinned Rust toolchain manually.
+- Review the pinned Debian `bookworm` and `bookworm-security` snapshots for
+  both Dockerfiles together. Builds fail if either signed index is unavailable.
 - After reviewing a Cargo update, regenerate add-on metadata before rerunning CI.
 
 Store updates must keep sources, manifests, versions and checksums consistent.
