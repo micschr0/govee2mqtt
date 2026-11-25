@@ -5,7 +5,7 @@
 | `rust.yml` | Formatting, Clippy, Rustdoc, tests, build, fixture runtime checks and coverage |
 | `security.yml` | Actionlint, ShellCheck for the launcher and scripts, Cargo Audit and Gitleaks |
 | `store-integrity.yml` | Package checksums and consistency of `SOURCE.json` / `SOURCE_TAG` |
-| `package-verify.yml` | Ordinary Docker and add-on verification builds on native amd64 and arm64 runners; offline CLI smoke checks, no registry push |
+| `package-verify.yml` | Both image formats on native amd64 and arm64: offline CLI checks and a default-start smoke for the add-on, no registry push |
 | `renovate.yml` | Scheduled or manual Renovate runs; requires `RENOVATE_APP_ID` and `RENOVATE_PRIVATE_KEY` |
 
 Rust CI runs on application and add-on packaging changes, root Dockerfile and

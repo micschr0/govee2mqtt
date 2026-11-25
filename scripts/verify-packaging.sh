@@ -19,6 +19,7 @@ for kind in ordinary addon; do
             --build-arg "BUILD_ARCH=$1" --build-arg "BUILD_VERSION=$version" \
             --build-arg CARGO_PROFILE=verification -t "$image" govee2mqtt_security_local
         test "$(docker image inspect "$image" --format '{{ index .Config.Labels "io.hass.version" }}')" = "$version"
+        timeout --kill-after=30s 120s sh scripts/smoke-addon.sh "$platform" "$image"
         docker run --rm --platform "$platform" --network none \
             --entrypoint /bin/sh "$image" -ec '
                 zlib_version=$(dpkg-query -W -f="\${Version}" zlib1g)

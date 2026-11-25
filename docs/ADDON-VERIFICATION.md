@@ -193,6 +193,11 @@ Record each exit and image architecture separately. This context must compile
 from `govee2mqtt_security_local/local-source/`, not a prebuilt host binary.
 The Package verification workflow runs both checks on native runners; locally
 use `sh scripts/verify-packaging.sh amd64` (or `aarch64` on an eligible builder).
+For the add-on, it also starts the image without overriding its entrypoint or
+command. Bashio reads synthetic options from a loopback-only Supervisor API
+fixture. Within 120 seconds, the bridge must log an MQTT connection attempt to
+the fixture's configured port. No broker is listening: this proves the packaged
+launcher starts the bridge, not MQTT connectivity or a Supervisor installation.
 
 ## Isolated Supervisor baseline, upgrade and reset
 

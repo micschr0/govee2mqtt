@@ -12,6 +12,7 @@ on:
       - 'scripts/build-docker.sh'
       - 'scripts/check-store-source.py'
       - 'scripts/verify-packaging.sh'
+      - 'scripts/smoke-addon.sh'
       - '.github/workflows/package-verify.yml'
   workflow_dispatch:
 
